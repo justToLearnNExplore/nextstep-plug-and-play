@@ -8,7 +8,7 @@ import argparse
 import sys
 
 from .brain.brain import Brain
-from .brain.gemini import Gemini, NoKey
+from .brain.llm import NoKey, make_llm
 from .config import Config
 from .console import Console
 from .runner import Runner
@@ -36,16 +36,16 @@ def main() -> None:
 
     cfg = Config()
     try:
-        gemini = Gemini()
+        llm = make_llm()
     except NoKey as e:
         sys.exit(str(e))
-    brain = Brain(gemini, cfg.language, cfg.planner_models or None, cfg.operator_models or None)
+    brain = Brain(llm, cfg.language, cfg.planner_models or None, cfg.operator_models or None)
     goal = a.goal or input("🎤 What should I do? > ").strip()
     phone = make_phone(a.phone, a.serial, helper=not a.no_helper)
     try:
         report = Runner(cfg, brain, phone, Console(speak=cfg.speak and not a.quiet, auto_yes=a.yes)).run(goal)
         print(f"\n📊 {report.summary()}")
-        print(f"   Gemini: {gemini.calls} calls, {gemini.input_tokens} in / {gemini.output_tokens} out tokens")
+        print(f"   {type(llm).__name__}: {llm.calls} calls, {llm.input_tokens} in / {llm.output_tokens} out tokens")
     finally:
         phone.close()
 

@@ -114,7 +114,8 @@ class Runner:
         screen = self.phone.capture(False)
         try:
             plan, report.plan_ms = timed(self.brain.plan, goal, screen)
-        except RuntimeError:
+        except RuntimeError as e:
+            self.ui.status(f"({str(e)[:200]})")
             self.ui.say(phrase(self.lang, "no_brain"))
             return "plan_failed"
         if plan.refused:
@@ -164,7 +165,8 @@ class Runner:
                     turn, ms = timed(self.brain.next_turn, plan, history, screen, note, True, think_hard)
                     t.think_ms += ms
                     with_image = True
-            except RuntimeError:
+            except RuntimeError as e:
+                self.ui.status(f"({str(e)[:200]})")
                 self.ui.say(phrase(self.lang, "no_brain"))
                 return "brain_failed"
             t.screenshot = with_image

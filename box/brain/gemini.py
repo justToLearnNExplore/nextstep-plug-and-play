@@ -1,38 +1,24 @@
-"""Gemini, called directly from the box (no server in between = one network hop fewer per step).
+"""Gemini, called directly from the box with a Google AI Studio key (see llm.py for where keys live).
 
-The key lives only on the box: env NEXTSTEP_BOX_GEMINI_KEY or ~/.nextstep-box/gemini.key.
 Brief overloads (429/5xx) are retried once, then the next model in the list is tried.
 """
 
-import os
+import base64
 import time
-from pathlib import Path
 from typing import TypeVar
 
 from google import genai
 from google.genai import errors, types
 from pydantic import BaseModel
 
+from .llm import Image
+
 T = TypeVar("T", bound=BaseModel)
-KEY_FILE = Path(os.path.expanduser("~/.nextstep-box/gemini.key"))
-
-
-class NoKey(RuntimeError):
-    pass
-
-
-def load_key() -> str:
-    key = os.getenv("NEXTSTEP_BOX_GEMINI_KEY", "").strip()
-    if not key and KEY_FILE.exists():
-        key = KEY_FILE.read_text().strip()
-    if not key:
-        raise NoKey(f"No Gemini key. Put it in {KEY_FILE} (chmod 600) or NEXTSTEP_BOX_GEMINI_KEY.")
-    return key
 
 
 class Gemini:
-    def __init__(self, key: str | None = None, timeout_s: float = 30.0):
-        self.client = genai.Client(api_key=key or load_key(), http_options=types.HttpOptions(timeout=int(timeout_s * 1000)))
+    def __init__(self, key: str, timeout_s: float = 30.0):
+        self.client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=int(timeout_s * 1000)))
         self.calls = 0
         self.input_tokens = 0
         self.output_tokens = 0
@@ -44,6 +30,8 @@ class Gemini:
             response_schema=schema,
             thinking_config=types.ThinkingConfig(thinking_level=thinking),
         )
+        parts = [types.Part.from_bytes(data=base64.b64decode(p.jpeg_b64), mime_type="image/jpeg")
+                 if isinstance(p, Image) else p for p in parts]
         last: Exception | None = None
         for model in models:
             for attempt in range(2):
@@ -66,10 +54,3 @@ class Gemini:
         if u := getattr(res, "usage_metadata", None):
             self.input_tokens += int(u.prompt_token_count or 0)
             self.output_tokens += int(u.candidates_token_count or 0) + int(u.thoughts_token_count or 0)
-
-
-def image_part(jpeg_b64: str | None) -> list:
-    if not jpeg_b64:
-        return []
-    import base64
-    return [types.Part.from_bytes(data=base64.b64decode(jpeg_b64), mime_type="image/jpeg")]

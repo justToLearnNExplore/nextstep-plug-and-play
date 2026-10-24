@@ -9,7 +9,7 @@ Speed-first design:
 """
 
 from ..drivers.base import ScreenState
-from .gemini import Gemini, image_part
+from .llm import images
 from .schemas import Plan, Turn
 
 DEFAULT_MODELS = ("gemini-3.8-flash", "gemini-3.5-flash")
@@ -60,9 +60,9 @@ def screen_text(screen: ScreenState, limit: int = 90) -> str:
 
 
 class Brain:
-    def __init__(self, gemini: Gemini, language: str = "en-IN",
+    def __init__(self, llm, language: str = "en-IN",
                  planner_models: list[str] | None = None, operator_models: list[str] | None = None):
-        self.g = gemini
+        self.g = llm  # Gemini or Gateway: anything with structured()
         self.language = language
         self.planner_models = planner_models or list(DEFAULT_MODELS)
         self.operator_models = operator_models or list(DEFAULT_MODELS)
@@ -82,6 +82,6 @@ class Brain:
             f"Goal: {plan.goal}\n{self._lang()}\nDone so far:\n{done}"
             + (f"\nNote: {note}" if note else "")
             + f"\nScreen:\n{screen_text(screen)}",
-            *image_part(screen.screenshot_b64 if with_image else None),
+            *images(screen.screenshot_b64 if with_image else None),
         ]
         return self.g.structured(self.operator_models, OPERATOR, parts, Turn, thinking="HIGH" if think_hard else "LOW")

@@ -24,7 +24,9 @@ box/
   phrases.py           everything the box says by itself, in English, Hindi and Kannada
   console.py           stand-in for the box's button, LED and speaker (terminal + macOS `say`)
   brain/
-    gemini.py          Gemini client: key on the box only, retry once, then fall back to the next model
+    llm.py             picks the model route from the keys on the box
+    gemini.py          Gemini direct (Google AI Studio key): retry once, then fall back to the next model
+    gateway.py         Gemini via Vercel AI Gateway (OpenAI-compatible API, strict JSON schema), same fallback
     schemas.py         Plan / Turn / Action: small structured answers (fewer tokens = faster)
     brain.py           planner + operator prompts; screen sent as a numbered element list
     safety.py          gates: auto / confirm (irreversible) / private (passwords, OTPs, payment apps) / blocked
@@ -46,13 +48,14 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 helper/build.sh                      # Android helper app (needs JDK 17+ and the Android SDK)
 ```
 
-The box needs its own Gemini API key (from a Google Cloud / AI Studio project of its own). Copy the key, then:
+The box needs one model key of its own. Keys stay in `~/.nextstep-box/` and never go into the repo.
 
-```bash
-mkdir -p ~/.nextstep-box && pbpaste > ~/.nextstep-box/gemini.key && chmod 600 ~/.nextstep-box/gemini.key
-```
+| Option | Cost | Get the key | Save it (after copying the key) |
+|---|---|---|---|
+| **Vercel AI Gateway** | $5 free credit every 30 days (accounts that haven't paid) | vercel.com → AI Gateway → API Keys → Create key | `pbpaste > ~/.nextstep-box/ai-gateway.key && chmod 600 ~/.nextstep-box/ai-gateway.key` |
+| **Gemini direct** | Google AI Studio free tier / billing | aistudio.google.com → Get API key → Create API key in new project | `pbpaste > ~/.nextstep-box/gemini.key && chmod 600 ~/.nextstep-box/gemini.key` |
 
-(or set `NEXTSTEP_BOX_GEMINI_KEY`). The key never goes into the repo. Then, with an Android emulator or a phone with USB debugging on (`adb devices` shows it):
+If both are present the box uses Gemini direct (one network hop fewer); `NEXTSTEP_BOX_LLM=gateway` or `=gemini` picks one. Environment variables `NEXTSTEP_BOX_AI_GATEWAY_KEY` / `NEXTSTEP_BOX_GEMINI_KEY` work too. Then, with an Android emulator or a phone with USB debugging on (`adb devices` shows it):
 
 ```bash
 .venv/bin/python -m box --phone android "Set an alarm for 7 AM"
