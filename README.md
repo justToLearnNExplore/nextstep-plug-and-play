@@ -2,7 +2,39 @@
 
 **A small box an elderly person plugs into their phone, Android or iPhone, so an AI agent can use the phone for them.** It's inspired by [NextStep](https://github.com/justToLearnNExplore/nextstep) by Team Northstar but is a separate project: the box has its **own brain** (Gemini, called directly from the box with its own API key) and shares no server, account or database with the NextStep app.
 
-> Status: **Milestone 1**, box software running on a Mac against simulators. No hardware yet.
+> Status (25 Oct 2026): **the box's software works; no physical box yet.** A Mac stands in for the box,
+> an Android emulator and a real iPhone (through iPhone Mirroring) for the phone. Details below.
+
+## Status: what works, compared with the NextStep app
+
+| | NextStep app (Android) | Box + Android | Box + iPhone |
+|---|---|---|---|
+| Plug in → greeting → speak → it's done | (an app, nothing to plug in) | ✅ on the emulator (`--serve`); not yet on a real phone or a real Pi | 🟡 works through iPhone Mirroring on a Mac; on the Pi not built yet |
+| Understands English, Hindi, Kannada | ✅ | ✅ | ✅ (same box) |
+| Speaks English, Hindi, Kannada | ✅ | ✅ English, Hindi on the Mac; Kannada too on the Pi (espeak-ng, robotic); Gemini live voice: prototype | same |
+| Asks before order / send / pay / call; hands over PINs and OTPs | ✅ | ✅ | ✅ |
+| One-step alarms, timers, calls, messages, volume, battery | — | ✅ | ❌ step by step only |
+| Explain my screen, scam check | ✅ | ✅ | 🟡 same code (they only need the screen), untested on iPhone |
+| What did I miss?, phone off silent | ✅ | ✅ | ❌ (iOS doesn't let the box in) |
+| Medicine label and grocery list from the camera | ✅ | ✅ | ❌ |
+| Learned routines, pop-up rules | ✅ | ✅ | 🟡 same code, untested on iPhone |
+| Blinkit / Uber orders | ✅ | 🟡 step by step, untested (not on the emulator) | 🟡 untested |
+| Types Hindi / Kannada into apps | ✅ | ✅ | ❌ English only so far |
+| Family live timeline | ✅ | ❌ (needs a server) | ❌ |
+| Speed of a simple task | — | 4–7 s | ~20–30 s |
+
+**Still to do**
+
+1. **Build and test the Pi box** ([HARDWARE.md](HARDWARE.md): parts, wiring, `pi/install-from-mac.sh`): microphone, speaker,
+   button, light and start-at-power-on have only been tested on a Mac and in a Pi-like Linux container.
+2. **A real Android phone**: everything so far ran on the Android 10 emulator. Phone makers differ (Xiaomi, for
+   example, needs an extra "USB debugging (security settings)" switch for taps); Blinkit and Uber orders need a real phone.
+3. **Gemini live voice agent**: connect its `do_task` to the box's brain, then switch it on once paid credits are added
+   (Vercel's free tier refuses live and voice models). Until then the box uses its own voice.
+4. **iPhone on the Pi**: the Pi as USB keyboard and mouse (exact pointing unproven), AirPlay to see the screen (the
+   iPhone has to start Screen Mirroring), reading words without Apple's Mac-only text recognition, and typing Hindi
+   and Kannada (iPhone keyboard layouts, to be tried).
+5. Later: the family timeline (needs a server); iOS Simulator tests (need Xcode).
 
 ## Why a box?
 
@@ -143,6 +175,30 @@ called), with the box's own brain:
 Not brought over: the family's live timeline (needs a server), the floating bubble (the box has no
 screen of its own), Uber and Blinkit ordering are possible step by step but untested (not on the emulator).
 
+## Gemini live voice agent (prototype)
+
+```bash
+.venv/bin/python -m box.live                 # talk to it (Mac microphone and speakers); --headphones to interrupt it
+.venv/bin/python -m box.live --hear req.wav  # one recorded request: timing, transcript, reply saved with --save
+```
+
+The plan for the box's voice: one two-way Gemini live session (`gemini-3.8-live`, the warm "Sulafat" voice) that
+listens all the time, answers in the language it is spoken to, can be interrupted, and hands every request to the box
+through a `do_task` tool (in the prototype a stand-in that does nothing yet, so the box's brain, shortcuts and safety
+questions stay in charge). It knows the date and reports only what `do_task` says happened. Through loudspeakers the
+microphone pauses while it talks; with headphones the person can cut in.
+
+| Recorded request | Heard | First sound after the request ended |
+|---|---|---|
+| "Please call my son Ravi." | right | 2.0 s |
+| "आज कौन सा दिन है? और रवि बेटे को फ़ोन लगाओ।" | "रविवार बेटे" (Ravi misheard as Sunday, after a question about the day; synthetic voice) | 2.4 s |
+| "ನನ್ನ ಮಗ ರವಿಗೆ ಕರೆ ಮಾಡಿ." | right (transcript in Latin letters), answered in Kannada | 1.5 s |
+
+It needs the Google key (test only: the free tier may use what it hears to improve Google's products) or, for real
+seniors, paid credits; Vercel's free tier refuses live and voice models, and its speech endpoint can't stream. Until
+then the box keeps its own voice. Gemini's one-shot voice (`gemini-3.8-flash-tts`) was also tried: natural in all three
+languages, but 5.5–6.6 s before it speaks unless streamed (first sound 1.4 s).
+
 ## A real iPhone through iPhone Mirroring
 
 The box will see an iPhone only as a picture and work it as a mouse and keyboard. macOS iPhone Mirroring (macOS 15+, iOS 18+, same Apple ID, no cable needed) gives a Mac exactly that, so the same brain runs on a real iPhone today:
@@ -248,7 +304,7 @@ So the box now tries **3 Flash Preview, 3.6 Flash, 3.5 Flash, then 2.5 Flash** b
 
 ## Roadmap
 
-1. **Milestone 1** (now): box software + Android emulator ✅ · a real iPhone through iPhone Mirroring ✅ (typing English only) · iOS Simulator (after Xcode is installed)
-2. Speed: box brain with batches + on-box checks ✅ · playbooks ✅ · faster settle ✅ · Android helper app (screen in 20 ms, any-language typing, one-step alarms) ✅ · one-step calls, messages, directions, volume, battery ✅ · voice: plug in and talk ✅ · streaming voice
+1. **Milestone 1** (now): box software + Android emulator ✅ · NextStep's features in the box ✅ · a real iPhone through iPhone Mirroring ✅ (typing English only) · a real Android phone · iOS Simulator (after Xcode is installed)
+2. Speed: box brain with batches + on-box checks ✅ · playbooks ✅ · faster settle ✅ · Android helper app (screen in 20 ms, any-language typing, one-step alarms) ✅ · one-step calls, messages, directions, volume, battery ✅ · voice: plug in and talk ✅ · Gemini live voice agent (prototype ✅; connect to the brain; needs credits)
 3. Hardware: the first box on a Raspberry Pi Zero 2 W, Android first (parts, wiring and setup: [HARDWARE.md](HARDWARE.md)); then iPhone (USB mouse/keyboard + AirPlay receiver)
 4. Cheaper dongle (ESP32-S3 / P4) with the brain running on a phone or a small hub
