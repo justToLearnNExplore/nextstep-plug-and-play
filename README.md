@@ -66,12 +66,14 @@ If both are present the box uses Gemini direct (one network hop fewer); `NEXTSTE
 ## How the brain stays fast
 
 1. **Plan once.** One Gemini call turns the request into a yes/no question and a precise goal, and picks a playbook if one fits.
-2. **Playbooks skip the AI.** Web search, allowed links and opening apps jump straight to the right screen. Alarms are set in one step by the helper app through the Clock's own "set alarm" intent; without the helper, the box opens the alarm list directly.
+2. **Playbooks skip the AI.** Alarms, reminders and timers are set in one step by the helper app through the Clock's own "set alarm" / "set timer" intents (without the helper, the box opens the right Clock screen). Web search, allowed links and opening the right app jump straight to the right screen.
 3. **A few actions per call.** The operator returns up to 5 actions, each with the text it expects to see afterwards. The box re-reads the screen after each action and checks that text itself, and asks Gemini again only when the batch is used up or something unexpected appears.
 4. **Numbers, not pixels.** The screen goes to Gemini as a numbered element list. The box maps `[n]` back to the element and, after the screen moves, finds it again by its label.
 5. **Pictures only when needed.** A screenshot is sent on the first look, on sparse screens, after something unexpected, or when the brain asks. Never on screens with password fields or in payment apps.
 
-Safety never depends on the model: taps that order, pay, send, book, delete or install always ask first; passwords, PINs, OTPs and payment apps are handed to the user; links outside an allowlist are blocked; tapping the same thing on an unchanged screen is caught (warn once, then stop).
+Safety never depends on the model: taps that order, pay, send, book, delete or install, accept terms or allow permissions always ask first (a number pad's backspace doesn't); passwords, PINs, OTPs and payment apps are handed to the user; links outside an allowlist are blocked; an action that changes nothing is reported to the brain with what the screen shows, and the third time the box stops; going round in circles stops it too.
+
+Every run leaves a trace on the box (`~/.nextstep-box/runs/*.jsonl`: plan, each screen as the brain saw it, each action and result) for debugging. It never leaves the box.
 
 ## The Android helper app
 
@@ -112,7 +114,17 @@ Baseline (first version, which used a remote server as its brain): "Set an alarm
 
 Scripted 3-tap task on the Clock app (no Gemini, same steps): **10.7 s with plain ADB → 3.4 s with the helper**; time spent reading the screen 4.9 s → 0.24 s. Most of what's left is waiting for the app's own animations to finish.
 
-Live Gemini timings come next, once the box's own key is set up.
+### Live runs (Vercel AI Gateway free tier, Android 10 emulator, `--yes`)
+
+On the free tier only Gemini 2.5 Flash / Flash-Lite are allowed; the box notices the refusal for 3.x models once and uses 2.5 Flash from then on.
+
+| Request | Before | Now | How |
+|---|---|---|---|
+| "Set an alarm for 7:30 in the morning" | 45 s | **3.2 s** | 1 Gemini call (plan) + alarm playbook |
+| "Remind me to take my tablets at 9 pm" | — | **3.5 s** | alarm labelled "Tablets" |
+| "Start a 5 minute timer" | 91.6 s (12 brain turns) | **3.7 s** | timer playbook |
+
+Step-by-step tasks are limited by the model: Gemini 2.5 Flash takes ~2–8 s per turn with a screenshot (one turn took 23 s) and misread the Clock's timer keypad several times; "minimal" thinking was faster but once claimed success on a paused timer, so the box stays on "low". Gemini 3.x Flash (paid credits or a Google AI Studio key) should do better; to be measured. All tests so far cost about $0.10 of the free $5.
 
 ## Roadmap
 
