@@ -71,7 +71,7 @@ The microphone and amplifier share one I2S sound bus; Linux sees them as one sou
 | Keys, helper app | `~/.nextstep-box/`, built on the Mac | copied by `pi/install-from-mac.sh` (no Android SDK on the Pi) ✅ |
 | Internet | the Mac's | home Wi‑Fi, set once on the card (later perhaps the phone's own data) |
 
-✅ = written and tested on the Mac (unit tests); not yet run on a real Pi.
+✅ = written and tested: all tests pass in a Python 3.11 ARM64 Debian Bookworm container (what Raspberry Pi OS is built on), where espeak-ng spoke the greeting in English, Hindi and Kannada; not yet run on a real Pi.
 
 ## iPhone on the Pi (second step, to be tested)
 
