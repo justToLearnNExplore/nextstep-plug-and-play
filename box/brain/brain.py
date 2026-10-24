@@ -12,7 +12,7 @@ import html
 
 from ..drivers.base import ScreenState
 from .llm import Audio, images
-from .schemas import Plan, Reply, Turn
+from .schemas import Explanation, Plan, Reply, Turn
 
 # Fastest on a free Google AI Studio key (3.8 / 3.7 Flash are mostly busy there: 503/504 after 8-29 s;
 # 2.5 is closed to new keys). On Vercel AI Gateway's free tier only 2.5 is allowed: the box skips the
@@ -31,7 +31,8 @@ Rules:
   words and language); play_video to play or watch something on YouTube; directions for the way to a place
   (show the route, never start navigation; mode=walking or transit only if they said so); volume when the
   phone is too loud or too quiet (up, down, or max if they can't hear it at all); battery for questions about
-  the battery; web_search for
+  the battery; explain_screen when they ask what is on the screen or what this is, or are confused by it;
+  web_search for
   looking something up; open_link only for these URL forms: https://www.youtube.com/results?search_query=…,
   https://blinkit.com/s/?q=…, https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[formatted_address]=…,
   https://www.google.com/search?q=…, https://www.google.com/maps/search/…; open_app whenever the task
@@ -43,6 +44,17 @@ Rules:
 - Refuse anything harmful, sending money to people, or sharing OTPs/PINs/passwords.
 - A spoken request comes as a recording: write what they said in `heard`. If it holds no request for the
   phone (silence, noise, a TV, people talking to each other), leave `heard` and `goal` empty.
+""".strip()
+
+EXPLAINER = """
+You help an older adult who is confused by what their phone shows. From the element list (and the
+screenshot, if there is one) explain in 2-3 short, calm sentences what this screen is (which app, what
+it is for) and what is safe to do next.
+- risk=danger if it asks for a UPI PIN, OTP, password or card details, wants a remote-access app
+  (AnyDesk, TeamViewer, an .apk) installed, or looks like a scam: phishing, a fake prize, KYC or
+  "account blocked" page. Then say clearly never to share a PIN, OTP or password, and suggest=back.
+- risk=caution for payment pages, permission prompts, ads with install buttons, unknown links.
+- Otherwise risk=none and suggest=none. Never tell them to type anything secret.
 """.strip()
 
 LISTENER = """
@@ -126,6 +138,13 @@ class Brain:
         # Models sometimes write HTML entities ("21&deg;C"); the speaker would read them out.
         return plan.model_copy(update={"summary": html.unescape(plan.summary), "done_message": html.unescape(plan.done_message),
                                        "steps": [html.unescape(x) for x in plan.steps]})
+
+    def explain(self, screen: ScreenState) -> Explanation:
+        """What the current screen is, in plain words; the screenshot goes too unless a password field shows."""
+        with_image = bool(screen.screenshot_b64) and not screen.has_secure_field
+        parts = [f"{self._lang()}\nScreen:\n{screen_text(screen)}", *images(screen.screenshot_b64 if with_image else None)]
+        exp = self.g.structured(self.planner_models, EXPLAINER, parts, Explanation)
+        return exp.model_copy(update={"explanation": html.unescape(exp.explanation)})
 
     def hear_answer(self, speech_wav_b64: str, question: str) -> str:
         """'yes', 'no' or 'unclear' for a spoken answer to `question`."""

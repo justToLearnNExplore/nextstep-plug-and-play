@@ -19,16 +19,24 @@ class Plan(BaseModel):
     refused: bool = Field(description="True for anything harmful, moving money to people, or sharing OTPs/PINs/passwords.")
     app: str = Field(description="Main app to use, e.g. 'YouTube', 'Clock', 'Chrome'. Empty if none.")
     playbook: Literal["none", "set_alarm", "set_timer", "call", "send_message", "play_video", "directions", "volume",
-                      "battery", "open_link", "web_search", "open_app"] = Field(
+                      "battery", "explain_screen", "open_link", "web_search", "open_app"] = Field(
         description="A shortcut that does the task (or its first part) without step-by-step AI: "
         "set_alarm (params hour 0-23, minute, label), set_timer (params seconds, label), "
         "call (param contact + contact_latin, or number), send_message (params contact + contact_latin or number, "
         "text, app whatsapp|sms), play_video (param query), directions (params place, mode driving|walking|transit), "
-        "volume (param level up|down|max), battery (no params), open_link (param url), web_search (param query), "
-        "open_app (param app).")
+        "volume (param level up|down|max), battery (no params), explain_screen (no params), open_link (param url), "
+        "web_search (param query), open_app (param app).")
     params: list[Param] = Field(description="Playbook parameters, e.g. [{name: 'hour', value: '7'}].")
     goal: str = Field(description="Precise English instruction for the phone operator, all the way to the result.")
     done_message: str = Field(description="What to say when it worked, user's language, e.g. 'Your alarm is set for 7 AM.'")
+
+
+class Explanation(BaseModel):
+    """'What is this screen?' in plain words, with the safest next step."""
+    explanation: str = Field(description="2-3 short, calm sentences in the user's language: what this screen is "
+                             "(which app, what it is for) and what is safe to do next.")
+    risk: Literal["none", "caution", "danger"]
+    suggest: Literal["none", "back", "home"] = Field(description="The safest step when there is risk, else none.")
 
 
 class Reply(BaseModel):

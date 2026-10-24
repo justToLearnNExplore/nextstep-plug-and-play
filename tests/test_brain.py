@@ -92,6 +92,9 @@ class FakeConsole:
     def timing(self, t):
         pass
 
+    def finish_speaking(self):
+        pass
+
     def ask(self, question, details=None, yes="Yes", no="No", plan=False):
         self.asked.append(question)
         return self.answers.pop(0) if self.answers else True

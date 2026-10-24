@@ -32,6 +32,8 @@ PHRASES = {
         "say_yes_no": "Please say yes or no.",
         "unplugged": "The phone is unplugged. Goodbye!",
         "allow_debugging": "Please tap Allow on the phone's screen.",
+        "take_back": "Shall I take you back?",
+        "go_home_q": "Shall I go to the home screen?",
     },
     "hi-IN": {
         "thinking": "एक पल, सोच रहा हूँ…",
@@ -64,6 +66,8 @@ PHRASES = {
         "say_yes_no": "कृपया हाँ या ना बोलिए।",
         "unplugged": "फ़ोन निकाल दिया गया है। फिर मिलेंगे!",
         "allow_debugging": "कृपया फ़ोन की स्क्रीन पर Allow दबाइए।",
+        "take_back": "क्या मैं आपको वापस ले चलूँ?",
+        "go_home_q": "क्या मैं होम स्क्रीन पर चलूँ?",
     },
     "kn-IN": {
         "thinking": "ಒಂದು ಕ್ಷಣ, ಯೋಚಿಸುತ್ತಿದ್ದೇನೆ…",
@@ -96,6 +100,8 @@ PHRASES = {
         "say_yes_no": "ದಯವಿಟ್ಟು ಹೌದು ಅಥವಾ ಇಲ್ಲ ಎಂದು ಹೇಳಿ.",
         "unplugged": "ಫೋನ್ ತೆಗೆಯಲಾಗಿದೆ. ಮತ್ತೆ ಸಿಗೋಣ!",
         "allow_debugging": "ದಯವಿಟ್ಟು ಫೋನ್ ಪರದೆಯ ಮೇಲೆ Allow ಒತ್ತಿ.",
+        "take_back": "ನಿಮ್ಮನ್ನು ಹಿಂದಕ್ಕೆ ಕರೆದೊಯ್ಯಲೇ?",
+        "go_home_q": "ಹೋಮ್ ಸ್ಕ್ರೀನ್‌ಗೆ ಹೋಗಲೇ?",
     },
 }
 

@@ -1,6 +1,7 @@
 """Shortcuts that do a common task (or its first part) without asking Gemini step by step.
 
 These ask their own, more exact question instead of the plan's (or none):
+explain_screen  says what the current screen is and whether it is safe; offers to go back if it isn't
 call          looks the person up in the phone's contacts on the box (the list never goes to Gemini), asks
               once naming the exact person and number, then starts the call (Android: CALL intent)
 send_message  opens the WhatsApp or SMS chat with the text already typed, asks "Send … to …?", taps Send
@@ -137,10 +138,12 @@ def route_shown(screen: ScreenState) -> bool:
 
 # ---- before the plan's question ----------------------------------------------------------------------
 
-def before_approval(plan: Plan, phone: PhoneDriver, ui, cfg: Config) -> str | None:
+def before_approval(plan: Plan, phone: PhoneDriver, ui, cfg: Config, brain=None) -> str | None:
     """Playbooks that ask their own, more exact question (or none). Returns the run's outcome,
     'continue' (approved: the operator finishes) or None (not handled: ask the plan's question as usual)."""
     p, lang = params(plan), cfg.language
+    if plan.playbook == "explain_screen" and brain is not None:
+        return _explain(phone, ui, lang, brain)
     if plan.playbook == "battery" and hasattr(phone, "battery"):
         b = phone.battery()  # type: ignore[attr-defined]
         if not b.get("ok"):
@@ -152,6 +155,17 @@ def before_approval(plan: Plan, phone: PhoneDriver, ui, cfg: Config) -> str | No
     if plan.playbook == "send_message" and hasattr(phone, "open_chat") and p.get("text"):
         return _send_message(p, phone, ui, cfg)
     return None
+
+
+def _explain(phone: PhoneDriver, ui, lang: str, brain) -> str:
+    """Nothing changes, so no question first; a risky screen gets an offer to leave it."""
+    exp = brain.explain(phone.capture(True))
+    ui.say(exp.explanation)
+    if exp.risk != "none" and exp.suggest in ("back", "home"):
+        ui.finish_speaking()
+        if ui.ask(phrase(lang, "take_back" if exp.suggest == "back" else "go_home_q")):
+            phone.execute("go_back" if exp.suggest == "back" else "go_home", {}, None)  # type: ignore[arg-type]
+    return "done"
 
 
 def _not_found(p: dict[str, str], ui, lang: str) -> str:

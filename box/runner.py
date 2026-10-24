@@ -161,7 +161,7 @@ class Runner:
             self.ui.say(plan.summary)
             return "refused"
         # Calls, messages and the battery ask their own, more exact question (or none).
-        outcome = before_approval(plan, self.phone, self.ui, self.cfg)
+        outcome = before_approval(plan, self.phone, self.ui, self.cfg, self.brain)
         if outcome:
             report.playbook = plan.playbook
             self._trace("playbook", name=plan.playbook, outcome=outcome)
