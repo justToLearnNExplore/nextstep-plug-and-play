@@ -6,6 +6,10 @@
 
     <!-- Lets the box set alarms and timers in one step (the adb shell itself may not hold this). -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- "What did I miss?": missed calls. Granted by the box over adb (pm grant), read on the phone. -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <!-- "My phone is on silent": Do Not Disturb off. Allowed by the box over adb (cmd notification allow_dnd). -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
     <queries>
         <intent>

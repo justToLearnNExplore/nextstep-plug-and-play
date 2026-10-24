@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 PACKAGE = "com.nextstepbox.helper"
-VERSION = 3  # must match Box.VERSION in helper/src/com/nextstepbox/helper/Box.java
+VERSION = 4  # must match Box.VERSION in helper/src/com/nextstepbox/helper/Box.java
 SOCKET = "nextstep-box-helper"
 APK = Path(os.getenv("NEXTSTEP_BOX_HELPER_APK", "")
            or Path(__file__).resolve().parents[2] / "helper" / "build" / "nextstep-box-helper.apk")
@@ -36,6 +36,7 @@ class Helper:
         self.sock: socket.socket | None = None
         self.lock = threading.Lock()
         self._install()
+        self._grant()
         self._launch()
 
     @classmethod
@@ -63,6 +64,12 @@ class Helper:
             out = self._run_adb("install", str(APK))
         if "Success" not in out:
             raise HelperError(f"install failed: {out.strip()[-200:]}")
+
+    def _grant(self) -> None:
+        """What the helper may read or change, given over adb (runtime permissions can't be asked for on
+        screen: the helper has none). Missed calls for "What did I miss?"; Do Not Disturb for "louder"."""
+        self.shell.run(f"pm grant {PACKAGE} android.permission.READ_CALL_LOG >/dev/null 2>&1; "
+                       f"cmd notification allow_dnd {PACKAGE} >/dev/null 2>&1")
 
     def _launch(self) -> None:
         # Starting it again replaces any copy left over from an earlier run.

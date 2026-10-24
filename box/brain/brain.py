@@ -9,10 +9,11 @@ Speed-first design:
 """
 
 import html
+import time
 
 from ..drivers.base import ScreenState
 from .llm import Audio, images
-from .schemas import Explanation, Plan, Reply, Turn
+from .schemas import Explanation, Missed, Plan, Reply, Turn
 
 # Fastest on a free Google AI Studio key (3.8 / 3.7 Flash are mostly busy there: 503/504 after 8-29 s;
 # 2.5 is closed to new keys). On Vercel AI Gateway's free tier only 2.5 is allowed: the box skips the
@@ -30,9 +31,9 @@ Rules:
   WhatsApp or SMS message (app=sms only if they said SMS or text message; text = their message exactly, in their
   words and language); play_video to play or watch something on YouTube; directions for the way to a place
   (show the route, never start navigation; mode=walking or transit only if they said so); volume when the
-  phone is too loud or too quiet (up, down, or max if they can't hear it at all); battery for questions about
-  the battery; explain_screen when they ask what is on the screen or what this is, or are confused by it;
-  web_search for
+  phone is too loud or too quiet (up, down, or max if they can't hear it at all or it doesn't ring); battery
+  for questions about the battery; explain_screen when they ask what is on the screen or what this is, or are
+  confused by it; missed for "what did I miss?", missed calls or new messages; web_search for
   looking something up; open_link only for these URL forms: https://www.youtube.com/results?search_query=…,
   https://blinkit.com/s/?q=…, https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[formatted_address]=…,
   https://www.google.com/search?q=…, https://www.google.com/maps/search/…; open_app whenever the task
@@ -55,6 +56,13 @@ it is for) and what is safe to do next.
   "account blocked" page. Then say clearly never to share a PIN, OTP or password, and suggest=back.
 - risk=caution for payment pages, permission prompts, ads with install buttons, unknown links.
 - Otherwise risk=none and suggest=none. Never tell them to type anything secret.
+""".strip()
+
+MISSED = """
+Tell an older adult what they missed on their phone in the last hour: missed calls and new messages.
+Group by person, most important first (family, doctor, repeated calls). Use names, not numbers, when a
+name is known. Short and warm, to be read aloud. Never read out codes: say "a verification code".
+Say plainly if a message looks like a scam (do not open its link). If there is nothing, say so kindly.
 """.strip()
 
 LISTENER = """
@@ -84,6 +92,13 @@ Each turn you get the goal, what was done so far, and the screen as a numbered e
 - If the user asked a question (weather, a score, opening hours...), the message IS the answer, read from the
   screen: e.g. "It is 22°C and cloudy in Bengaluru, up to 27°C today." Never just "the results are shown".
 """.strip()
+
+
+def clock(at_ms: object) -> str:
+    """' at 14:05' for a phone timestamp in ms, or ''."""
+    if not isinstance(at_ms, int) or not at_ms:
+        return ""
+    return f" at {time.strftime('%H:%M', time.localtime(at_ms / 1000))}"
 
 
 def _inside(inner: list[int], outer: list[int]) -> bool:
@@ -145,6 +160,13 @@ class Brain:
         parts = [f"{self._lang()}\nScreen:\n{screen_text(screen)}", *images(screen.screenshot_b64 if with_image else None)]
         exp = self.g.structured(self.planner_models, EXPLAINER, parts, Explanation)
         return exp.model_copy(update={"explanation": html.unescape(exp.explanation)})
+
+    def summarise_missed(self, calls: list[dict], messages: list[dict]) -> str:
+        lines = [f"Missed call from {c.get('name') or c.get('number', 'unknown')}" + clock(c.get("at")) for c in calls]
+        lines += [f"{m.get('app', 'Message')} from {m.get('from', 'someone')}{clock(m.get('at'))}: {m.get('text', '')}"
+                  for m in messages]
+        text = f"{self._lang()}\nLast hour:\n" + ("\n".join(lines) or "(nothing)")
+        return html.unescape(self.g.structured(self.planner_models, MISSED, [text], Missed).summary)
 
     def hear_answer(self, speech_wav_b64: str, question: str) -> str:
         """'yes', 'no' or 'unclear' for a spoken answer to `question`."""

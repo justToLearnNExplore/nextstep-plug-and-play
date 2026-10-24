@@ -3,9 +3,11 @@ package com.nextstepbox.helper;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Instrumentation;
+import android.app.NotificationManager;
 import android.app.UiAutomation;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.graphics.Rect;
@@ -17,6 +19,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.provider.AlarmClock;
+import android.provider.CallLog;
 import android.util.Base64;
 import android.view.Display;
 import android.view.InputDevice;
@@ -44,10 +47,11 @@ import java.nio.charset.StandardCharsets;
  *
  * Why it exists: reading the screen takes ~1.1 s with `uiautomator dump` (a new process every time);
  * here the accessibility tree is already connected, so a read takes tens of milliseconds. It can
- * also type any language (Hindi, Kannada...), set alarms in one step and change the volume.
+ * also type any language (Hindi, Kannada...), set alarms in one step, change the volume (and take the
+ * phone off silent), and read the missed calls for "What did I miss?".
  */
 public class Box extends Instrumentation {
-    static final int VERSION = 3;
+    static final int VERSION = 4;
     static final String SOCKET = "nextstep-box-helper";
     static final int SHELL_UID = 2000;
     static final int MAX_TEXT = 200;
@@ -141,6 +145,8 @@ public class Box extends Instrumentation {
                 return setTimer(req.getInt("seconds"), req.optString("label", ""));
             case "volume":
                 return volume(req.getString("level"));
+            case "missed_calls":
+                return missedCalls(req.getLong("since_ms"));
             case "quit":
                 running = false;
                 return ok();
@@ -349,14 +355,16 @@ public class Box extends Instrumentation {
         int[] streams = {AudioManager.STREAM_RING, AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_MUSIC,
                 AudioManager.STREAM_VOICE_CALL};
         String[] names = {"ring", "notification", "media", "call"};
+        boolean unsilenced = !"down".equals(level) && unsilence(am);
         // All targets first: on many phones ring and notification are one volume, so changing them
         // one after the other from the live values would move it twice.
         int[] targets = new int[streams.length];
         for (int i = 0; i < streams.length; i++) {
             int s = streams[i], max = am.getStreamMaxVolume(s), cur = am.getStreamVolume(s), step = (max + 3) / 4;
             int floor = s == AudioManager.STREAM_MUSIC ? 0 : 1;  // "quieter" never silences the ringer or calls
+            int audible = cur * 10 < max * 3 ? (max * 7 + 9) / 10 : 0;  // "louder" from near-silent: at least 70%
             targets[i] = "max".equals(level) ? max
-                    : "up".equals(level) ? Math.min(max, cur + step)
+                    : "up".equals(level) ? Math.min(max, Math.max(cur + step, audible))
                     : Math.min(cur, Math.max(floor, cur - step));
         }
         for (int i = 0; i < streams.length; i++) {
@@ -371,7 +379,45 @@ public class Box extends Instrumentation {
             int max = am.getStreamMaxVolume(streams[i]);
             now.put(names[i], max == 0 ? 0 : am.getStreamVolume(streams[i]) * 100 / max);
         }
-        return ok().put("percent", now.getInt("ring")).put("streams", now);
+        return ok().put("percent", now.getInt("ring")).put("streams", now).put("unsilenced", unsilenced);
+    }
+
+    /** Louder also means: ring again. Do Not Disturb off and the ringer back to normal. */
+    private boolean unsilence(AudioManager am) {
+        boolean changed = false;
+        NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        try {
+            if (nm.getCurrentInterruptionFilter() > NotificationManager.INTERRUPTION_FILTER_ALL
+                    && nm.isNotificationPolicyAccessGranted()) {
+                nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL);
+                changed = true;
+            }
+            if (am.getRingerMode() != AudioManager.RINGER_MODE_NORMAL) {
+                am.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
+                changed = true;
+            }
+        } catch (SecurityException e) {
+            // not allowed to change Do Not Disturb: the volume still goes up
+        }
+        return changed;
+    }
+
+    /** Missed calls since `sinceMs` (newest first, at most 30). Nothing is kept on the phone or the box. */
+    private JSONObject missedCalls(long sinceMs) throws JSONException {
+        JSONArray calls = new JSONArray();
+        String[] cols = {CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME, CallLog.Calls.DATE};
+        try (Cursor c = getContext().getContentResolver().query(CallLog.Calls.CONTENT_URI, cols,
+                CallLog.Calls.TYPE + " = ? AND " + CallLog.Calls.DATE + " > ?",
+                new String[]{String.valueOf(CallLog.Calls.MISSED_TYPE), String.valueOf(sinceMs)},
+                CallLog.Calls.DATE + " DESC")) {
+            while (c != null && c.moveToNext() && calls.length() < 30) {
+                calls.put(new JSONObject().put("number", c.getString(0)).put("name", c.isNull(1) ? "" : c.getString(1))
+                        .put("at", c.getLong(2)));
+            }
+        } catch (SecurityException e) {
+            return fail("no_call_log_permission");
+        }
+        return ok().put("calls", calls);
     }
 
     // ---- replies ---------------------------------------------------------------------------------

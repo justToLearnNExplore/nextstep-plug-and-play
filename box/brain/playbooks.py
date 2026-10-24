@@ -2,6 +2,8 @@
 
 These ask their own, more exact question instead of the plan's (or none):
 explain_screen  says what the current screen is and whether it is safe; offers to go back if it isn't
+missed        "What did I miss?": missed calls, SMS and message notifications of the last hour, read on
+              the phone; codes (OTPs) are blanked out on the box before anything goes to the AI
 call          looks the person up in the phone's contacts on the box (the list never goes to Gemini), asks
               once naming the exact person and number, then starts the call (Android: CALL intent)
 send_message  opens the WhatsApp or SMS chat with the text already typed, asks "Send … to …?", taps Send
@@ -144,6 +146,11 @@ def before_approval(plan: Plan, phone: PhoneDriver, ui, cfg: Config, brain=None)
     p, lang = params(plan), cfg.language
     if plan.playbook == "explain_screen" and brain is not None:
         return _explain(phone, ui, lang, brain)
+    if plan.playbook == "missed" and brain is not None and hasattr(phone, "recent_activity"):
+        got = phone.recent_activity()  # type: ignore[attr-defined]
+        messages = [{**m, "text": hide_codes(str(m.get("text", "")))} for m in got.get("messages", [])]
+        ui.say(brain.summarise_missed(got.get("calls", []), messages))
+        return "done"
     if plan.playbook == "battery" and hasattr(phone, "battery"):
         b = phone.battery()  # type: ignore[attr-defined]
         if not b.get("ok"):
@@ -155,6 +162,15 @@ def before_approval(plan: Plan, phone: PhoneDriver, ui, cfg: Config, brain=None)
     if plan.playbook == "send_message" and hasattr(phone, "open_chat") and p.get("text"):
         return _send_message(p, phone, ui, cfg)
     return None
+
+
+CODE = re.compile(r"(?<![₹\d.,/:-])\b\d{4,8}\b(?![.,/:-]?\d)")
+
+
+def hide_codes(text: str) -> str:
+    """OTPs and PINs never leave the phone: 4-8 digit numbers become [code] (amounts with ₹ and phone
+    numbers stay)."""
+    return CODE.sub("[code]", text)
 
 
 def _explain(phone: PhoneDriver, ui, lang: str, brain) -> str:
@@ -262,7 +278,8 @@ def run_playbook(plan: Plan, phone: PhoneDriver, lang: str = "en-IN") -> tuple[s
     if plan.playbook == "volume" and hasattr(phone, "set_volume") and p.get("level", "").lower() in ("up", "down", "max"):
         res = phone.set_volume(p["level"].lower())  # type: ignore[attr-defined]
         if res.get("ok") and "percent" in res:
-            res["say"] = phrase(lang, "volume", percent=res["percent"])
+            res["say"] = (phrase(lang, "ringer_on") + " " if res.get("unsilenced") else "") + \
+                phrase(lang, "volume", percent=res["percent"])
         return ("done" if res.get("ok") else "skipped"), res
     if plan.playbook == "play_video" and p.get("query"):
         if hasattr(phone, "play_video") and phone.play_video(p["query"]).get("ok"):  # type: ignore[attr-defined]

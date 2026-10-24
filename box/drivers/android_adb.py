@@ -43,6 +43,10 @@ KEYS = {"enter": 66, "back": 4, "home": 3, "search": 84, "delete": 67, "tab": 61
         "volume_down": 25, "app_switch": 187}
 BOUNDS = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
 CONTACT_ROW = re.compile(r"^Row: \d+ display_name=(.*), data1=(.*)$", re.M)
+SMS_ROW = re.compile(r"^Row: \d+ address=(.*?), body=(.*), date=(\d+)$", re.M)
+# "What did I miss?" reads these apps' notifications (SMS itself comes from the inbox).
+MESSAGE_APPS = {"com.whatsapp": "WhatsApp", "com.whatsapp.w4b": "WhatsApp", "com.truecaller": "Truecaller",
+                "org.telegram.messenger": "Telegram", "com.google.android.gm": "Gmail"}
 OFFHOOK = 2  # TelephonyManager.CALL_STATE_OFFHOOK: a call is being dialled or is going on
 
 
@@ -313,6 +317,22 @@ class AndroidAdbDriver:
         self.settle()
         return {"ok": True, "app": used}
 
+    def recent_activity(self, since_s: int = 3600) -> dict[str, Any]:
+        """Missed calls, SMS and messaging-app notifications from the last `since_s` seconds, read on the
+        phone: calls by the helper (call-log permission), SMS by the adb shell, the rest from notifications."""
+        since_ms = (int(self.shell.run("date +%s").strip() or time.time()) - since_s) * 1000  # the phone's clock
+        r = self._h("missed_calls", since_ms=since_ms)
+        calls = (r or {}).get("calls", [])
+        names = {re.sub(r"\D", "", n)[-10:]: name for name, n in (self.contacts() or [])}
+        for c in calls:
+            c["name"] = c.get("name") or names.get(re.sub(r"\D", "", c.get("number", ""))[-10:], "")
+        out = self.shell.run(f"content query --uri content://sms/inbox --projection address:body:date "
+                             f"--where 'date>{since_ms}' --sort 'date DESC' 2>/dev/null")
+        messages = [{"app": "SMS", "from": names.get(re.sub(r"\D", "", a)[-10:], a), "text": body, "at": int(at)}
+                    for a, body, at in SMS_ROW.findall(out)][:30]
+        messages += notification_messages(self.shell.run("dumpsys notification --noredact 2>/dev/null"))
+        return {"ok": True, "calls": calls, "messages": messages, "calls_readable": bool(r and r.get("ok"))}
+
     def play_video(self, query: str) -> dict[str, Any]:
         """YouTube's own "play from search" (what voice assistants use): it usually starts the top result."""
         pkg = KNOWN_APPS["youtube"]
@@ -333,7 +353,7 @@ class AndroidAdbDriver:
         helper, volume key presses (they change whichever sound is active)."""
         r = self._h("volume", level=level)
         if r and r.get("ok"):
-            return {"ok": True, "percent": r["percent"]}
+            return {"ok": True, "percent": r["percent"], "unsilenced": bool(r.get("unsilenced"))}
         code = 25 if level == "down" else 24
         self.shell.run(f"input keyevent {' '.join([str(code)] * (15 if level == 'max' else 3))}")
         return {"ok": True}
@@ -363,6 +383,19 @@ class AndroidAdbDriver:
         if self.helper:
             self.helper.close()
         self.shell.close()
+
+
+def notification_messages(dump: str) -> list[dict[str, Any]]:
+    """Messages in messaging apps' notifications (dumpsys notification --noredact), newest dump order."""
+    messages = []
+    for block in dump.split("NotificationRecord(")[1:]:
+        pkg = re.search(r"pkg=(\S+)", block)
+        app = MESSAGE_APPS.get(pkg.group(1)) if pkg else None
+        title = re.search(r"android\.title=\w+ \((.*)\)$", block, re.M)
+        text = re.search(r"android\.(?:bigText|text)=\w+ \((.*)\)$", block, re.M)
+        if app and title and text and "new messages" not in text.group(1):
+            messages.append({"app": app, "from": title.group(1), "text": text.group(1)[:300]})
+    return messages[:30]
 
 
 def parse_ui_xml(xml: str) -> tuple[str, list[dict[str, Any]], bool]:
