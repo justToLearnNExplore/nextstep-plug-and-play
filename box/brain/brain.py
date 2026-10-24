@@ -14,8 +14,10 @@ from ..drivers.base import ScreenState
 from .llm import images
 from .schemas import Plan, Turn
 
-# Last one: on Vercel AI Gateway's free tier only Gemini 2.5 models are allowed.
-DEFAULT_MODELS = ("gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash")
+# Fastest on a free Google AI Studio key (3.8 / 3.7 Flash are mostly busy there: 503/504 after 8-29 s;
+# 2.5 is closed to new keys). On Vercel AI Gateway's free tier only 2.5 is allowed: the box skips the
+# others after their first refusal.
+DEFAULT_MODELS = ("gemini-3-flash-preview", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash")
 LANGS = {"en-IN": "simple Indian English", "hi-IN": "simple Hindi in Devanagari script",
          "kn-IN": "simple Kannada in Kannada script"}
 

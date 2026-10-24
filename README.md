@@ -173,6 +173,8 @@ On the emulator (direct = models 3 Flash Preview, then 3.6 Flash, then 3.5 Flash
 
 Gemini 3.x reads the timer keypad right where 2.5 Flash keeps failing. Without the helper app most of the step-by-step time is Android itself: reading the screen of a running timer takes plain ADB ~10 s.
 
+So the box now tries **3 Flash Preview, 3.6 Flash, 3.5 Flash, then 2.5 Flash** by default (`NEXTSTEP_BOX_PLANNER_MODELS` / `NEXTSTEP_BOX_OPERATOR_MODELS` change it, e.g. to put 3.8 Flash first on a paid key). On Vercel's free tier the three 3.x models are refused in ~0.2 s each, once per run, and 2.5 Flash answers. The free Google tier's speed varies: in a later run with this order the same alarm request took 11.6 s to plan instead of 1.7 s.
+
 ## Roadmap
 
 1. **Milestone 1** (now): box software + Android emulator ✅ · iOS Simulator (after Xcode is installed)
