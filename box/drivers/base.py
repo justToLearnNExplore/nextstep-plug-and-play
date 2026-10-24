@@ -44,3 +44,9 @@ def px(value: Any, size: int) -> int:
     """The brain works in 0-999 coordinates; map them to device pixels."""
     v = min(max(int(value), 0), 999)
     return int(v * size / 1000)
+
+
+def center(node: dict[str, Any], screen: ScreenState) -> tuple[int, int]:
+    """An element's centre in the brain's 0-999 coordinates."""
+    b = node["b"]
+    return (int((b[0] + b[2]) / 2 * 1000 / max(screen.width, 1)), int((b[1] + b[3]) / 2 * 1000 / max(screen.height, 1)))

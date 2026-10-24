@@ -18,6 +18,7 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from typing import Any
+from urllib.parse import quote
 
 from PIL import Image
 
@@ -37,10 +38,12 @@ KNOWN_APPS = {
 }
 # Links open straight in their app (no "Open with" chooser).
 LINK_APPS = {"blinkit.com": "com.grofers.customerapp", "youtube.com": "com.google.android.youtube",
-             "m.uber.com": "com.ubercab", "wa.me": "com.whatsapp"}
+             "m.uber.com": "com.ubercab", "wa.me": "com.whatsapp", "google.com/maps": "com.google.android.apps.maps"}
 KEYS = {"enter": 66, "back": 4, "home": 3, "search": 84, "delete": 67, "tab": 61, "volume_up": 24,
         "volume_down": 25, "app_switch": 187}
 BOUNDS = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
+CONTACT_ROW = re.compile(r"^Row: \d+ display_name=(.*), data1=(.*)$", re.M)
+OFFHOOK = 2  # TelephonyManager.CALL_STATE_OFFHOOK: a call is being dialled or is going on
 
 
 class AdbShell:
@@ -251,6 +254,82 @@ class AndroidAdbDriver:
         self.shell.run("am start -a android.intent.action.SHOW_TIMERS >/dev/null 2>&1")
         self.settle()
         return {"ok": False, "error": "no_helper", "opened": "timers"}
+
+    def contacts(self) -> list[tuple[str, str]] | None:
+        """(name, number) for every number in the phone's contacts, read on the box only (the adb shell
+        may read contacts); None if it can't."""
+        out = self.shell.run("content query --uri content://com.android.contacts/data/phones "
+                             "--projection display_name:data1 2>&1")
+        if out.lstrip().startswith(("Error", "Exception")) or "SecurityException" in out:
+            return None
+        return [(m.group(1).strip(), m.group(2).strip()) for m in CONTACT_ROW.finditer(out)]
+
+    def _call_state(self) -> int:
+        states = re.findall(r"mCallState=(\d)", self.shell.run("dumpsys telephony.registry | grep mCallState"))
+        return max((int(x) for x in states), default=0)  # one line per SIM
+
+    def call(self, number: str) -> dict[str, Any]:
+        """Starts the call (the adb shell holds CALL_PHONE) and checks the phone really is calling."""
+        tel = re.sub(r"[^\d+]", "", number)
+        if not tel:
+            return {"ok": False, "error": "no_number"}
+        self.shell.run(f"am start -a android.intent.action.CALL -d tel:{tel} >/dev/null 2>&1")
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            if self._call_state() == OFFHOOK:
+                return {"ok": True}
+            time.sleep(0.25)
+        # Not started (Android sends emergency numbers to the dialer instead): show the number ready to call.
+        self.shell.run(f"am start -a android.intent.action.DIAL -d tel:{tel} >/dev/null 2>&1")
+        self.settle()
+        return {"ok": False, "error": "call_not_started", "dialer": True}
+
+    def open_chat(self, app: str, number: str, text: str) -> dict[str, Any]:
+        """WhatsApp (or SMS) chat with `number` (international digits) and `text` typed in, not sent."""
+        text = " ".join(text.split())
+        if app == "whatsapp" and self._installed(LINK_APPS["wa.me"]):
+            url = f"https://wa.me/{number}?text={quote(text, safe='')}"
+            self.shell.run(f"am start -a android.intent.action.VIEW -d {shlex.quote(url)} "
+                           f"-p {LINK_APPS['wa.me']} >/dev/null 2>&1")
+            used = "whatsapp"
+        else:
+            self.shell.run(f"am start -a android.intent.action.SENDTO -d sms:+{number} "
+                           f"--es sms_body {shlex.quote(text)} >/dev/null 2>&1")
+            used = "sms"
+        self.settle()
+        return {"ok": True, "app": used}
+
+    def play_video(self, query: str) -> dict[str, Any]:
+        """YouTube's own "play from search" (what voice assistants use): it usually starts the top result."""
+        pkg = KNOWN_APPS["youtube"]
+        if not self._installed(pkg):
+            return {"ok": False, "error": "not_installed"}
+        self.shell.run(f"am start -a android.media.action.MEDIA_PLAY_FROM_SEARCH -p {pkg} "
+                       f"--es query {shlex.quote(query)} >/dev/null 2>&1")
+        return {"ok": True}
+
+    def media_playing(self, pkg: str) -> bool:
+        """True if `pkg` has a media session that is playing (PlaybackState 3)."""
+        out = self.shell.run("dumpsys media_session")
+        return any(block.startswith(pkg) and "state=PlaybackState {state=3" in block
+                   for block in out.split("package=")[1:])
+
+    def set_volume(self, level: str) -> dict[str, Any]:
+        """'up' / 'down' / 'max' for ring, notification, media and call volume (helper app); without the
+        helper, volume key presses (they change whichever sound is active)."""
+        r = self._h("volume", level=level)
+        if r and r.get("ok"):
+            return {"ok": True, "percent": r["percent"]}
+        code = 25 if level == "down" else 24
+        self.shell.run(f"input keyevent {' '.join([str(code)] * (15 if level == 'max' else 3))}")
+        return {"ok": True}
+
+    def battery(self) -> dict[str, Any]:
+        out = self.shell.run("dumpsys battery")
+        level, status = re.search(r"level: (\d+)", out), re.search(r"status: (\d+)", out)
+        if not level:
+            return {"ok": False}
+        return {"ok": True, "level": int(level.group(1)), "charging": bool(status and status.group(1) == "2")}
 
     def _installed(self, pkg: str) -> bool:
         return "package:" in self.shell.run(f"pm path {pkg} 2>/dev/null")

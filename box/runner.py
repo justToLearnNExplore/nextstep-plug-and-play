@@ -14,12 +14,12 @@ from pathlib import Path
 from typing import Any
 
 from .brain.brain import Brain, screen_text
-from .brain.playbooks import run_playbook
+from .brain.playbooks import before_approval, run_playbook
 from .brain.safety import PAYMENT_APPS, gate, node_text
 from .brain.schemas import Action, Plan
 from .config import Config
 from .console import Console
-from .drivers.base import PhoneDriver, ScreenState
+from .drivers.base import PhoneDriver, ScreenState, center
 from .phrases import phrase
 
 NEEDS_TARGET = {"tap", "long_press"}
@@ -67,11 +67,6 @@ def timed(fn, *args, **kw):
     t0 = time.perf_counter()
     out = fn(*args, **kw)
     return out, int((time.perf_counter() - t0) * 1000)
-
-
-def center(node: dict[str, Any], screen: ScreenState) -> tuple[int, int]:
-    b = node["b"]
-    return (int((b[0] + b[2]) / 2 * 1000 / max(screen.width, 1)), int((b[1] + b[3]) / 2 * 1000 / max(screen.height, 1)))
 
 
 def find_by_label(screen: ScreenState, label: str, near: tuple[int, int] | None = None) -> dict[str, Any] | None:
@@ -147,17 +142,27 @@ class Runner:
         if plan.refused:
             self.ui.say(plan.summary)
             return "refused"
+        # Calls, messages and the battery ask their own, more exact question (or none).
+        outcome = before_approval(plan, self.phone, self.ui, self.cfg)
+        if outcome:
+            report.playbook = plan.playbook
+            self._trace("playbook", name=plan.playbook, outcome=outcome)
+            return self._operate(plan, report) if outcome == "continue" else outcome
         if not self.ui.ask(plan.summary, details=plan.steps):
             self.ui.say(phrase(self.lang, "declined"))
             return "declined"
 
         if plan.playbook != "none":
-            status, _ = run_playbook(plan, self.phone)
+            status, res = run_playbook(plan, self.phone, self.lang)
+            self._trace("playbook", name=plan.playbook, status=status, result=res)
             if status != "skipped":
                 report.playbook = plan.playbook
             if status == "done":
-                self.ui.say(plan.done_message or phrase(self.lang, "done"))
+                self.ui.say(res.get("say") or plan.done_message or phrase(self.lang, "done"))
                 return "done"
+            if status == "stop":
+                self.ui.say(res["say"])
+                return res["outcome"]
         return self._operate(plan, report)
 
     # ---- see → decide → act -------------------------------------------------------------------

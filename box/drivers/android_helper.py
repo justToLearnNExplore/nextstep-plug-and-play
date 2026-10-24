@@ -3,7 +3,8 @@
 The helper runs only while the box is connected: it is started with `am instrument -w`, which ends
 when adb does, and it answers on a local socket that only adb may use. Compared with plain ADB:
 reading the screen ~20 ms instead of ~1.1 s, a tap ~10 ms instead of ~85 ms, typing in any
-language, and alarms set in one step. If anything about it fails, the driver uses plain ADB.
+language, alarms set in one step, and volume control. If anything about it fails, the driver
+uses plain ADB.
 """
 
 import json
@@ -17,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 PACKAGE = "com.nextstepbox.helper"
-VERSION = 2  # must match Box.VERSION in helper/src/com/nextstepbox/helper/Box.java
+VERSION = 3  # must match Box.VERSION in helper/src/com/nextstepbox/helper/Box.java
 SOCKET = "nextstep-box-helper"
 APK = Path(os.getenv("NEXTSTEP_BOX_HELPER_APK", "")
            or Path(__file__).resolve().parents[2] / "helper" / "build" / "nextstep-box-helper.apk")

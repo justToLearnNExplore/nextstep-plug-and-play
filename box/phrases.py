@@ -14,6 +14,18 @@ PHRASES = {
         "too_long": "This is taking too long, so I stopped. Nothing was ordered or sent.",
         "stuck": "I got stuck, so I stopped. Nothing was ordered or sent.",
         "no_brain": "Sorry, I can't reach the internet right now. Please try again in a little while.",
+        "no_contact": "I couldn't find {name} in your contacts.",
+        "call_confirm": "Call {name} on {number}?",
+        "call_number": "Call {number}?",
+        "calling": "Calling {name}.",
+        "dial_ready": "The number is ready on the screen. Press the green button to call.",
+        "which": "Do you mean {name}?",
+        "send_confirm": "Send “{text}” to {name} on {app}?",
+        "sent": "Sent to {name}.",
+        "battery": "Your battery is at {level} percent.",
+        "charging": "It is charging.",
+        "volume": "The volume is now at {percent} percent.",
+        "outdated": "{app} on this phone needs an update first. Please update it from the Play Store.",
     },
     "hi-IN": {
         "thinking": "एक पल, सोच रहा हूँ…",
@@ -28,6 +40,18 @@ PHRASES = {
         "too_long": "इसमें बहुत समय लग रहा था, इसलिए मैंने रोक दिया। कुछ भी ऑर्डर या भेजा नहीं गया।",
         "stuck": "मैं अटक गया, इसलिए रुक गया। कुछ भी ऑर्डर या भेजा नहीं गया।",
         "no_brain": "माफ़ कीजिए, अभी इंटरनेट से नहीं जुड़ पा रहा। थोड़ी देर बाद फिर कोशिश करें।",
+        "no_contact": "आपके कॉन्टैक्ट्स में {name} नहीं मिले।",
+        "call_confirm": "{name} को {number} पर कॉल करूँ?",
+        "call_number": "{number} पर कॉल करूँ?",
+        "calling": "{name} को कॉल कर रहा हूँ।",
+        "dial_ready": "नंबर स्क्रीन पर तैयार है। कॉल करने के लिए हरा बटन दबाएँ।",
+        "which": "क्या आपका मतलब {name} से है?",
+        "send_confirm": "{name} को {app} पर “{text}” भेजूँ?",
+        "sent": "{name} को भेज दिया।",
+        "battery": "आपकी बैटरी {level} प्रतिशत है।",
+        "charging": "फ़ोन चार्ज हो रहा है।",
+        "volume": "आवाज़ अब {percent} प्रतिशत पर है।",
+        "outdated": "इस फ़ोन पर {app} को पहले अपडेट करना होगा। कृपया Play Store से अपडेट करें।",
     },
     "kn-IN": {
         "thinking": "ಒಂದು ಕ್ಷಣ, ಯೋಚಿಸುತ್ತಿದ್ದೇನೆ…",
@@ -42,9 +66,22 @@ PHRASES = {
         "too_long": "ತುಂಬಾ ಸಮಯ ಆಗುತ್ತಿತ್ತು, ಹಾಗಾಗಿ ನಿಲ್ಲಿಸಿದೆ. ಏನನ್ನೂ ಆರ್ಡರ್ ಮಾಡಿಲ್ಲ ಅಥವಾ ಕಳುಹಿಸಿಲ್ಲ.",
         "stuck": "ನಾನು ಸಿಕ್ಕಿಹಾಕಿಕೊಂಡೆ, ಹಾಗಾಗಿ ನಿಲ್ಲಿಸಿದೆ. ಏನನ್ನೂ ಆರ್ಡರ್ ಮಾಡಿಲ್ಲ ಅಥವಾ ಕಳುಹಿಸಿಲ್ಲ.",
         "no_brain": "ಕ್ಷಮಿಸಿ, ಈಗ ಇಂಟರ್ನೆಟ್‌ಗೆ ಸಂಪರ್ಕವಾಗುತ್ತಿಲ್ಲ. ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+        "no_contact": "ನಿಮ್ಮ ಸಂಪರ್ಕಗಳಲ್ಲಿ {name} ಸಿಗಲಿಲ್ಲ.",
+        "call_confirm": "{name} ಅವರಿಗೆ {number} ಗೆ ಕರೆ ಮಾಡಲೇ?",
+        "call_number": "{number} ಗೆ ಕರೆ ಮಾಡಲೇ?",
+        "calling": "{name} ಅವರಿಗೆ ಕರೆ ಮಾಡುತ್ತಿದ್ದೇನೆ.",
+        "dial_ready": "ಸಂಖ್ಯೆ ಪರದೆಯ ಮೇಲೆ ಸಿದ್ಧವಾಗಿದೆ. ಕರೆ ಮಾಡಲು ಹಸಿರು ಬಟನ್ ಒತ್ತಿ.",
+        "which": "ನೀವು ಹೇಳಿದ್ದು {name} ಅವರನ್ನೇ?",
+        "send_confirm": "{name} ಅವರಿಗೆ {app} ನಲ್ಲಿ “{text}” ಕಳುಹಿಸಲೇ?",
+        "sent": "{name} ಅವರಿಗೆ ಕಳುಹಿಸಿದೆ.",
+        "battery": "ನಿಮ್ಮ ಬ್ಯಾಟರಿ ಶೇಕಡಾ {level} ಇದೆ.",
+        "charging": "ಫೋನ್ ಚಾರ್ಜ್ ಆಗುತ್ತಿದೆ.",
+        "volume": "ಧ್ವನಿ ಈಗ ಶೇಕಡಾ {percent} ಇದೆ.",
+        "outdated": "ಈ ಫೋನ್‌ನಲ್ಲಿ {app} ಅನ್ನು ಮೊದಲು ಅಪ್‌ಡೇಟ್ ಮಾಡಬೇಕು. ದಯವಿಟ್ಟು Play Store ನಲ್ಲಿ ಅಪ್‌ಡೇಟ್ ಮಾಡಿ.",
     },
 }
 
 
-def phrase(lang: str, key: str) -> str:
-    return PHRASES.get(lang, PHRASES["en-IN"])[key]
+def phrase(lang: str, key: str, **fill: object) -> str:
+    text = PHRASES.get(lang, PHRASES["en-IN"])[key]
+    return text.format(**fill) if fill else text

@@ -1,7 +1,7 @@
 """The box's own safety gates. Every action passes here before it touches the phone.
 
 auto     routine step inside the approved plan: just do it
-confirm  irreversible (order, pay, send, book, delete, install) or consent (terms, permissions): ask first
+confirm  irreversible (order, pay, send, call, book, delete, install) or consent (terms, permissions): ask first
 private  passwords, PINs, OTPs, payment apps: the user does it themselves, the box never sees it
 blocked  never allowed (links outside the allowlist)
 """
@@ -17,6 +17,8 @@ IRREVERSIBLE = re.compile(
     r"place order|confirm order|order now|\bpay\b|proceed to pay|make payment|\bsend\b|\bshare\b|install|uninstall|"
     r"delete|remove account|transfer|buy now|submit|add address|save address|request (uber|ride|auto|moto|go)|"
     r"book (now|ride|auto)|confirm (pickup|booking|ride)|cancel (ride|trip)|भेजें|भेजो|ऑर्डर करें|भुगतान|ಕಳುಹಿಸಿ|ಪಾವತಿ|"
+    # phoning someone (not opening the call log or the dial pad)
+    r"(?<!end )(?<!hold )\bcall\b(?!\s*(log|history|settings|forwarding|waiting|blocking))|\bdial\b(?!\s*pad)|कॉल करें|ಕರೆ ಮಾಡಿ|"
     # agreeing to terms and granting permissions are the user's call too
     r"\baccept\b|\bagree\b|\ballow\b|while using the app|only this time|स्वीकार|अनुमति|ಒಪ್ಪಿ|ಅನುಮತಿಸಿ",
     re.I,
@@ -27,7 +29,7 @@ PAYMENT_APPS = {"net.one97.paytm", "com.phonepe.app", "com.google.android.apps.n
 LINK_ALLOWLIST = (
     "https://www.youtube.com/results?search_query=", "https://m.youtube.com/results?search_query=",
     "https://blinkit.com/s/?q=", "https://m.uber.com/ul/?action=setPickup", "https://www.google.com/search?q=",
-    "https://www.google.com/maps/search/",
+    "https://www.google.com/maps/search/", "https://www.google.com/maps/dir/?api=1&destination=",
 )
 
 

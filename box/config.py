@@ -17,5 +17,7 @@ class Config:
     planner_models: list[str] = field(default_factory=lambda: _models("NEXTSTEP_BOX_PLANNER_MODELS"))
     operator_models: list[str] = field(default_factory=lambda: _models("NEXTSTEP_BOX_OPERATOR_MODELS"))
     operator_thinking: str = os.getenv("NEXTSTEP_BOX_OPERATOR_THINKING", "LOW")  # MINIMAL / LOW / MEDIUM
+    # Added to phone numbers saved without one, for WhatsApp links (91 = India).
+    country_code: str = os.getenv("NEXTSTEP_BOX_COUNTRY_CODE", "91")
     max_turns: int = 40
     speak: bool = os.getenv("NEXTSTEP_SPEAK", "1") == "1"

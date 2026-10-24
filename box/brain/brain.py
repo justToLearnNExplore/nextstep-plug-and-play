@@ -22,11 +22,18 @@ You plan phone tasks for an older adult who spoke a request. They approve your p
 Rules:
 - `summary`: ONE short question naming the concrete result. Never narrate mechanics ("I will open the app").
 - Prefer a playbook when it does the job: set_alarm for alarms/reminders at a time; set_timer for a timer or
-  countdown (seconds = total length, e.g. 5 minutes -> 300); web_search for
+  countdown (seconds = total length, e.g. 5 minutes -> 300); call to phone someone; send_message to send a
+  WhatsApp or SMS message (app=sms only if they said SMS or text message; text = their message exactly, in their
+  words and language); play_video to play or watch something on YouTube; directions for the way to a place
+  (show the route, never start navigation; mode=walking or transit only if they said so); volume when the phone is too loud or too quiet (up, down, or max
+  if they can't hear it at all); battery for questions about the battery; web_search for
   looking something up; open_link only for these URL forms: https://www.youtube.com/results?search_query=…,
   https://blinkit.com/s/?q=…, https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[formatted_address]=…,
   https://www.google.com/search?q=…, https://www.google.com/maps/search/…; open_app whenever the task
   happens inside one app (it opens the app; the operator does the rest).
+- For call and send_message: contact = the name or word they used for the person, as said (e.g. 'Ravi', 'Doctor',
+  'बेटा'); contact_latin = the same in Latin letters if it was said in another script; or number = the digits
+  if they said a number. The box looks the person up in the phone's contacts itself.
 - `goal` must go all the way to the result (the box asks the user before any irreversible tap).
 - Refuse anything harmful, sending money to people, or sharing OTPs/PINs/passwords.
 """.strip()
@@ -49,6 +56,8 @@ Each turn you get the goal, what was done so far, and the screen as a numbered e
 - If the list is not enough (icons without text, pictures, maps), set need_screenshot=true with no actions.
 - done=true ONLY when the current screen proves the goal is achieved (e.g. a timer counting down, not paused;
   the item in the cart; the alarm switched on), or it is impossible; then a short, true message.
+- If the user asked a question (weather, a score, opening hours...), the message IS the answer, read from the
+  screen: e.g. "It is 22°C and cloudy in Bengaluru, up to 27°C today." Never just "the results are shown".
 """.strip()
 
 

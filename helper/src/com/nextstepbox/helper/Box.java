@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.media.AudioManager;
 import android.hardware.display.DisplayManager;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
@@ -43,10 +44,10 @@ import java.nio.charset.StandardCharsets;
  *
  * Why it exists: reading the screen takes ~1.1 s with `uiautomator dump` (a new process every time);
  * here the accessibility tree is already connected, so a read takes tens of milliseconds. It can
- * also type any language (Hindi, Kannada...) and set alarms in one step.
+ * also type any language (Hindi, Kannada...), set alarms in one step and change the volume.
  */
 public class Box extends Instrumentation {
-    static final int VERSION = 2;
+    static final int VERSION = 3;
     static final String SOCKET = "nextstep-box-helper";
     static final int SHELL_UID = 2000;
     static final int MAX_TEXT = 200;
@@ -138,6 +139,8 @@ public class Box extends Instrumentation {
                 return setAlarm(req.getInt("hour"), req.getInt("minute"), req.optString("label", ""));
             case "set_timer":
                 return setTimer(req.getInt("seconds"), req.optString("label", ""));
+            case "volume":
+                return volume(req.getString("level"));
             case "quit":
                 running = false;
                 return ok();
@@ -338,6 +341,37 @@ public class Box extends Instrumentation {
         if (i.resolveActivity(getContext().getPackageManager()) == null) return fail("no_clock_app");
         getContext().startActivity(i);
         return ok();
+    }
+
+    /** "up" / "down" / "max" for ring, notifications, media and calls; shows the volume bar. Returns the ring level in %. */
+    private JSONObject volume(String level) throws JSONException {
+        AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+        int[] streams = {AudioManager.STREAM_RING, AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_MUSIC,
+                AudioManager.STREAM_VOICE_CALL};
+        String[] names = {"ring", "notification", "media", "call"};
+        // All targets first: on many phones ring and notification are one volume, so changing them
+        // one after the other from the live values would move it twice.
+        int[] targets = new int[streams.length];
+        for (int i = 0; i < streams.length; i++) {
+            int s = streams[i], max = am.getStreamMaxVolume(s), cur = am.getStreamVolume(s), step = (max + 3) / 4;
+            int floor = s == AudioManager.STREAM_MUSIC ? 0 : 1;  // "quieter" never silences the ringer or calls
+            targets[i] = "max".equals(level) ? max
+                    : "up".equals(level) ? Math.min(max, cur + step)
+                    : Math.min(cur, Math.max(floor, cur - step));
+        }
+        for (int i = 0; i < streams.length; i++) {
+            try {
+                am.setStreamVolume(streams[i], targets[i], i == 0 ? AudioManager.FLAG_SHOW_UI : 0);
+            } catch (SecurityException e) {
+                // Do Not Disturb is on: only the user may change the ringer then
+            }
+        }
+        JSONObject now = new JSONObject();
+        for (int i = 0; i < streams.length; i++) {
+            int max = am.getStreamMaxVolume(streams[i]);
+            now.put(names[i], max == 0 ? 0 : am.getStreamVolume(streams[i]) * 100 / max);
+        }
+        return ok().put("percent", now.getInt("ring")).put("streams", now);
     }
 
     // ---- replies ---------------------------------------------------------------------------------
