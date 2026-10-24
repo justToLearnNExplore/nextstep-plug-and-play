@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NextStep Box helper: no activities (no app icon), no internet permission. It only runs while the
+     box is plugged in, started by the box with `am instrument -w` (see src/.../Box.java). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.nextstepbox.helper">
+
+    <!-- Lets the box set alarms in one step (the adb shell itself may not hold this). -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SET_ALARM" />
+        </intent>
+    </queries>
+
+    <application android:label="NextStep Box helper" android:allowBackup="false" />
+
+    <instrumentation
+        android:name=".Box"
+        android:label="NextStep Box helper"
+        android:targetPackage="com.nextstepbox.helper" />
+</manifest>

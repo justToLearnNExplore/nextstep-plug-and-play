@@ -1,7 +1,7 @@
 """Shortcuts that do a common task (or its first part) without asking Gemini step by step.
 
-set_alarm  Android: the Clock app's own SET_ALARM intent with SKIP_UI, one shell command; where the
-           adb shell lacks that permission it opens the alarm list and the operator finishes
+set_alarm  Android: the Clock app's own SET_ALARM intent with SKIP_UI, sent by the helper app (which
+           holds the permission); without it the box opens the alarm list and the operator finishes
 web_search / open_link / open_app  jump straight to the right screen; the operator takes it from there
 """
 

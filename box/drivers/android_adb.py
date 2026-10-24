@@ -1,12 +1,14 @@
-"""Android over ADB: no app on the phone, just USB debugging turned on once.
+"""Android over ADB: the user turns on USB debugging once; the box does the rest.
 
-Eyes: the accessibility tree (`uiautomator dump`) plus an occasional screenshot.
-Hands: `input` commands sent through ONE long-lived `adb shell`, so a tap costs a few
-milliseconds instead of starting a new adb process each time.
+Fast path: the box installs its small helper app (helper/, see android_helper.py) and talks to it
+while plugged in: screen reads in ~20 ms, taps in ~10 ms, typing in any language, one-step alarms.
+Plain-ADB path (used automatically if the helper can't run): the accessibility tree from
+`uiautomator dump` (~1.1 s) and `input` commands through ONE long-lived `adb shell`.
 """
 
 import base64
 import io
+import os
 import queue
 import re
 import shlex
@@ -19,6 +21,7 @@ from typing import Any
 
 from PIL import Image
 
+from .android_helper import Helper
 from .base import ScreenState, px
 
 ADB = "adb"
@@ -87,18 +90,40 @@ class AdbShell:
 class AndroidAdbDriver:
     name = "android"
 
-    def __init__(self, serial: str | None = None):
+    def __init__(self, serial: str | None = None, use_helper: bool = os.getenv("NEXTSTEP_BOX_NO_HELPER") != "1"):
         self.serial = serial
         self.shell = AdbShell(serial)
         size = self.shell.run("wm size")
         m = re.findall(r"(\d+)x(\d+)", size)
         self.width, self.height = (int(m[-1][0]), int(m[-1][1])) if m else (1080, 1920)
+        self.helper = Helper.start([ADB] + (["-s", serial] if serial else []), self.shell) if use_helper else None
+
+    def _h(self, cmd: str, **args: Any) -> dict[str, Any] | None:
+        """A helper call, or None when there is no helper (the caller then uses plain ADB)."""
+        if not self.helper:
+            return None
+        try:
+            return self.helper.call(cmd, **args)
+        except (OSError, ValueError) as e:
+            print(f"  (helper stopped: {e}; using plain ADB)", flush=True)
+            self.helper.close()
+            self.helper = None
+            return None
+
+    def _try(self, cmd: str, **args: Any) -> bool:
+        r = self._h(cmd, **args)
+        return bool(r and r.get("ok"))
 
     # ---- eyes ---------------------------------------------------------------------------------
 
     def capture(self, with_screenshot: bool) -> ScreenState:
-        xml = self.shell.run(f"uiautomator dump {DUMP_PATH} >/dev/null 2>&1; cat {DUMP_PATH}")
-        package, nodes, secure = parse_ui_xml(xml)
+        d = self._h("dump")
+        if d and d.get("ok"):
+            self.width, self.height = d["w"], d["h"]  # follows rotation
+            package, nodes, secure = d["package"], d["nodes"], d["secure"]
+        else:
+            xml = self.shell.run(f"uiautomator dump {DUMP_PATH} >/dev/null 2>&1; cat {DUMP_PATH}")
+            package, nodes, secure = parse_ui_xml(xml)
         shot = self._screenshot_b64() if with_screenshot else None
         return ScreenState(package=package, width=self.width, height=self.height, nodes=nodes,
                            screenshot_b64=shot, screenshot_tried=with_screenshot, has_secure_field=secure)
@@ -108,6 +133,9 @@ class AndroidAdbDriver:
         return subprocess.run(cmd, capture_output=True, timeout=20).stdout
 
     def _screenshot_b64(self) -> str | None:
+        r = self._h("screenshot", max_w=720, quality=60)
+        if r and r.get("ok"):
+            return r["jpeg_b64"]
         png = self._exec_out("screencap", "-p")
         if not png:
             return None
@@ -123,6 +151,8 @@ class AndroidAdbDriver:
 
     def settle(self, max_s: float = 2.5) -> None:
         """Returns as soon as the screen stops changing (two equal frames), at most max_s."""
+        if self._try("settle", max_ms=int(max_s * 1000)):
+            return
         time.sleep(0.15)
         deadline, last = time.time() + max_s, self._frame_hash()
         while time.time() < deadline:
@@ -138,24 +168,33 @@ class AndroidAdbDriver:
         w, h = self.width, self.height
         sh = self.shell.run
         if name == "click":
-            sh(f"input tap {px(args['x'], w)} {px(args['y'], h)}")
-        elif name == "long_press":
             x, y = px(args["x"], w), px(args["y"], h)
-            sh(f"input swipe {x} {y} {x} {y} {int(float(args.get('seconds', 1.5)) * 1000)}")
+            if not self._try("tap", x=x, y=y):
+                sh(f"input tap {x} {y}")
+        elif name == "long_press":
+            x, y, ms = px(args["x"], w), px(args["y"], h), int(float(args.get("seconds", 1.5)) * 1000)
+            if not self._try("tap", x=x, y=y, hold_ms=ms):
+                sh(f"input swipe {x} {y} {x} {y} {ms}")
         elif name == "drag_and_drop":
-            sh(f"input swipe {px(args['start_x'], w)} {px(args['start_y'], h)} "
-               f"{px(args['end_x'], w)} {px(args['end_y'], h)} 400")
+            x1, y1, x2, y2 = px(args["start_x"], w), px(args["start_y"], h), px(args["end_x"], w), px(args["end_y"], h)
+            if not self._try("swipe", x1=x1, y1=y1, x2=x2, y2=y2, ms=400):
+                sh(f"input swipe {x1} {y1} {x2} {y2} 400")
         elif name == "type":
+            # The helper replaces the field's text and handles every language; `input text` appends ASCII only.
             text = str(args.get("text", ""))
-            if not text.isascii():
-                return {"ok": False, "error": "non_ascii_text_needs_ime"}
-            sh(f"input text {shlex.quote(text.replace(' ', '%s'))}")
-            if args.get("press_enter"):
+            r = self._h("set_text", text=text)
+            if r and r.get("error") == "password_field":
+                return {"ok": False, "error": "password_field"}
+            if not (r and r.get("ok")):
+                if not text.isascii():
+                    return {"ok": False, "error": (r or {}).get("error") or "non_ascii_text_needs_helper"}
+                sh(f"input text {shlex.quote(text.replace(' ', '%s'))}")
+            if args.get("press_enter") and not self._try("enter"):
                 sh("input keyevent 66")
-        elif name in ("go_back", "go_home"):
-            sh(f"input keyevent {4 if name == 'go_back' else 3}")
-        elif name == "press_key":
-            sh(f"input keyevent {KEYS.get(str(args.get('key', 'enter')).lower(), 66)}")
+        elif name in ("go_back", "go_home", "press_key"):
+            code = 4 if name == "go_back" else 3 if name == "go_home" else KEYS.get(str(args.get("key", "enter")).lower(), 66)
+            if not self._try("key", code=code):
+                sh(f"input keyevent {code}")
         elif name == "open_app":
             pkg = self._package_for(str(args.get("app_name", "")))
             if not pkg:
@@ -188,6 +227,8 @@ class AndroidAdbDriver:
 
     def set_alarm(self, hour: int, minute: int, label: str = "") -> dict[str, Any]:
         """The Clock app's own "set alarm" intent; SKIP_UI sets it without opening any screen."""
+        if self._try("set_alarm", hour=int(hour), minute=int(minute), label=label):
+            return {"ok": True}  # sent by the helper app, which holds the SET_ALARM permission
         cmd = (f"am start -a android.intent.action.SET_ALARM --ei android.intent.extra.alarm.HOUR {int(hour)} "
                f"--ei android.intent.extra.alarm.MINUTES {int(minute)} --ez android.intent.extra.alarm.SKIP_UI true")
         if label:
@@ -218,6 +259,8 @@ class AndroidAdbDriver:
         return min(hits, key=len) if hits else None
 
     def close(self) -> None:
+        if self.helper:
+            self.helper.close()
         self.shell.close()
 
 
@@ -242,7 +285,8 @@ def parse_ui_xml(xml: str) -> tuple[str, list[dict[str, Any]], bool]:
         is_pw = a.get("password") == "true"
         click = a.get("clickable") == "true" or a.get("long-clickable") == "true"
         edit = "EditText" in a.get("class", "")
-        if not (text or desc or click or edit):
+        scroll = a.get("scrollable") == "true"
+        if not (text or desc or click or edit or scroll):
             continue
         n: dict[str, Any] = {"i": len(nodes), "cls": a.get("class", "").rsplit(".", 1)[-1], "b": b}
         if is_pw:
@@ -258,7 +302,7 @@ def parse_ui_xml(xml: str) -> tuple[str, list[dict[str, Any]], bool]:
             n["click"] = True
         if edit:
             n["edit"] = True
-        if a.get("scrollable") == "true":
+        if scroll:
             n["scroll"] = True
         if a.get("focused") == "true":
             n["focus"] = True

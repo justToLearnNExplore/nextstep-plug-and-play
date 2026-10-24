@@ -14,10 +14,10 @@ from .console import Console
 from .runner import Runner
 
 
-def make_phone(kind: str, serial: str | None):
+def make_phone(kind: str, serial: str | None, helper: bool = True):
     if kind == "android":
         from .drivers.android_adb import AndroidAdbDriver
-        return AndroidAdbDriver(serial)
+        return AndroidAdbDriver(serial, use_helper=helper)
     if kind == "ios-sim":
         from .drivers.ios_sim import IosSimDriver
         return IosSimDriver(serial)
@@ -31,6 +31,7 @@ def main() -> None:
     p.add_argument("--serial", help="adb serial or simulator UDID")
     p.add_argument("--yes", action="store_true", help="approve every question automatically (testing only)")
     p.add_argument("--quiet", action="store_true", help="don't speak")
+    p.add_argument("--no-helper", action="store_true", help="Android: plain ADB only, don't use the helper app")
     a = p.parse_args()
 
     cfg = Config()
@@ -40,7 +41,7 @@ def main() -> None:
         sys.exit(str(e))
     brain = Brain(gemini, cfg.language, cfg.planner_models or None, cfg.operator_models or None)
     goal = a.goal or input("🎤 What should I do? > ").strip()
-    phone = make_phone(a.phone, a.serial)
+    phone = make_phone(a.phone, a.serial, helper=not a.no_helper)
     try:
         report = Runner(cfg, brain, phone, Console(speak=cfg.speak and not a.quiet, auto_yes=a.yes)).run(goal)
         print(f"\n📊 {report.summary()}")
