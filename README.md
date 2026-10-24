@@ -56,7 +56,7 @@ The box needs one model key of its own. Keys stay in `~/.nextstep-box/` and neve
 | **Vercel AI Gateway** | $5 free credit every 30 days (accounts that haven't paid) | vercel.com → AI Gateway → API Keys → Create key | `pbpaste > ~/.nextstep-box/ai-gateway.key && chmod 600 ~/.nextstep-box/ai-gateway.key` |
 | **Gemini direct** | Google AI Studio free tier / billing | aistudio.google.com → Get API key → Create API key in new project | `pbpaste > ~/.nextstep-box/gemini.key && chmod 600 ~/.nextstep-box/gemini.key` |
 
-If both are present the box uses Gemini direct (one network hop fewer); `NEXTSTEP_BOX_LLM=gateway` or `=gemini` picks one. Environment variables `NEXTSTEP_BOX_AI_GATEWAY_KEY` / `NEXTSTEP_BOX_GEMINI_KEY` work too. Then, with an Android emulator or a phone with USB debugging on (`adb devices` shows it):
+If both are present the box uses Gemini direct (one network hop fewer); `NEXTSTEP_BOX_LLM=gateway` or `=gemini` picks one. Google's free tier may use what it is sent to improve its products, so it suits testing on an emulator, not a real person's screens (the paid tier and Vercel don't). Environment variables `NEXTSTEP_BOX_AI_GATEWAY_KEY` / `NEXTSTEP_BOX_GEMINI_KEY` work too. Then, with an Android emulator or a phone with USB debugging on (`adb devices` shows it):
 
 ```bash
 .venv/bin/python -m box --phone android "Set an alarm for 7 AM"
@@ -78,7 +78,7 @@ If both are present the box uses Gemini direct (one network hop fewer); `NEXTSTE
 4. **Numbers, not pixels.** The screen goes to Gemini as a numbered element list. The box maps `[n]` back to the element and, after the screen moves, finds it again by its label.
 5. **Pictures only when needed.** A screenshot is sent on the first look, on sparse screens, after something unexpected, or when the brain asks. Never on screens with password fields or in payment apps.
 
-Safety never depends on the model: taps that order, pay, send, call, book, delete or install, accept terms or allow permissions always ask first (a number pad's backspace and "End call" don't); passwords, PINs, OTPs and payment apps are handed to the user; links outside an allowlist are blocked; an action that changes nothing is reported to the brain with what the screen shows, and the third time the box stops; going round in circles stops it too.
+The box wakes a sleeping screen itself (a sleeping phone ignores every tap) and asks the user to unlock a PIN lock screen. Safety never depends on the model: taps that order, pay, send, call, book, delete or install, accept terms or allow permissions always ask first (a number pad's backspace and "End call" don't); passwords, PINs, OTPs and payment apps are handed to the user; links outside an allowlist are blocked; an action that changes nothing is reported to the brain with what the screen shows, and the third time the box stops; going round in circles stops it too.
 
 Every run leaves a trace on the box (`~/.nextstep-box/runs/*.jsonl`: plan, each screen as the brain saw it, each action and result) for debugging. It never leaves the box.
 
@@ -140,7 +140,38 @@ On the free tier only Gemini 2.5 Flash / Flash-Lite are allowed; the box notices
 
 Most of each time is the one planning call (2.6–4.3 s). In Hindi ("रवि बेटा को फ़ोन लगाओ") the box found the contact saved in Devanagari and asked in Hindi. Not checked live: YouTube playing (the emulator's 2020 YouTube app insists on an update first; the box says so in 3.8 s) and WhatsApp (needs a real account); both are covered by the automated tests.
 
-Step-by-step tasks are limited by the model: Gemini 2.5 Flash takes ~2–8 s per turn with a screenshot (one turn took 23 s) and misread the Clock's timer keypad several times; "minimal" thinking was faster but once claimed success on a paused timer, so the box stays on "low". Gemini 3.x Flash (paid credits or a Google AI Studio key) should do better; to be measured. All tests so far cost about $0.12 of the free $5.
+Step-by-step tasks are limited by the model: Gemini 2.5 Flash takes ~2–8 s per turn with a screenshot (one turn took 23 s) and misread the Clock's timer keypad several times; "minimal" thinking was faster but once claimed success on a paused timer, so the box stays on "low". All Vercel tests so far cost about $0.16 of the free $5.
+
+### Gemini direct (free Google AI Studio key) vs Vercel (free tier)
+
+Which models a free AI Studio key may use (checked 24 Oct 2026 with one tiny request each):
+
+| Answers in ~2 s | Busy or timing out | Not for this key |
+|---|---|---|
+| 3.6 Flash, 3.5 Flash, 3 Flash Preview, 3.1 Flash-Lite | 3.8 Flash (503 after 8 s, 504 after 29 s), 3.7 Flash (504 after 29 s), flash-latest | 2.5 Flash / Flash-Lite / Pro ("no longer available to new users"), every Pro model and gemini-4-argon (no free quota) |
+
+It also allows only about 5 requests a minute per model (the 6th within a minute was refused; a minute later it worked again). The box copes: a model that is refused is never tried again, a busy or slow one rests for 5 minutes and is tried after the others, and only quick failures are retried. The free Vercel tier is the opposite: only 2.5 Flash / Flash-Lite.
+
+Same screens, same prompts, one call at a time (planning: alarm / call / weather; one operator step on the Clock's timer screen):
+
+| Model (route) | Planning | Operator step |
+|---|---|---|
+| 3 Flash Preview (direct) | 1.8 / 1.3 / 1.4 s | 1.9 s, 2.6 s with screenshot |
+| 3.6 Flash (direct) | 5.2 / 2.0 / 9.5 s | 8.4 s |
+| 3.1 Flash-Lite (direct) | 15.8 / 4.1 / 3.2 s | 2.1 s but wrong (a 5-second timer); 504 after 29 s with screenshot |
+| 2.5 Flash (Vercel) | 2.9 / 2.2 / 2.0 s | 6.0 s, 3.8 s with screenshot |
+| 2.5 Flash-Lite (Vercel) | 2.7 / 1.4 / 2.5 s | 3.7 s, 2.8 s with screenshot |
+
+On the emulator (direct = models 3 Flash Preview, then 3.6 Flash, then 3.5 Flash):
+
+| Request | Direct | Vercel (2.5 Flash) |
+|---|---|---|
+| "Set an alarm for 7:30 in the morning" | **1.7 s** | 3.6 s |
+| "Call Ravi Kumar" | **2.8 s** | 3.4 s |
+| "What's the weather in Bengaluru today?" | **5.4 s** | 7.7 s |
+| "Start a 5 minute timer", step by step (no helper app, screen asleep at the start) | **done in 3 turns** (50 s and 76 s; one answer took 28 s) | stuck after 6 turns (66 s), nothing set |
+
+Gemini 3.x reads the timer keypad right where 2.5 Flash keeps failing. Without the helper app most of the step-by-step time is Android itself: reading the screen of a running timer takes plain ADB ~10 s.
 
 ## Roadmap
 

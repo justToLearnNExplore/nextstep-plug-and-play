@@ -8,6 +8,8 @@ Speed-first design:
 - low thinking, short outputs, stable system prompts (cache-friendly).
 """
 
+import html
+
 from ..drivers.base import ScreenState
 from .llm import images
 from .schemas import Plan, Turn
@@ -25,8 +27,9 @@ Rules:
   countdown (seconds = total length, e.g. 5 minutes -> 300); call to phone someone; send_message to send a
   WhatsApp or SMS message (app=sms only if they said SMS or text message; text = their message exactly, in their
   words and language); play_video to play or watch something on YouTube; directions for the way to a place
-  (show the route, never start navigation; mode=walking or transit only if they said so); volume when the phone is too loud or too quiet (up, down, or max
-  if they can't hear it at all); battery for questions about the battery; web_search for
+  (show the route, never start navigation; mode=walking or transit only if they said so); volume when the
+  phone is too loud or too quiet (up, down, or max if they can't hear it at all); battery for questions about
+  the battery; web_search for
   looking something up; open_link only for these URL forms: https://www.youtube.com/results?search_query=…,
   https://blinkit.com/s/?q=…, https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[formatted_address]=…,
   https://www.google.com/search?q=…, https://www.google.com/maps/search/…; open_app whenever the task
@@ -106,7 +109,10 @@ class Brain:
 
     def plan(self, goal: str, screen: ScreenState) -> Plan:
         prompt = f"{self._lang()}\nUser request: {goal}\nCurrent screen:\n{screen_text(screen, 40)}"
-        return self.g.structured(self.planner_models, PLANNER, [prompt], Plan)
+        plan = self.g.structured(self.planner_models, PLANNER, [prompt], Plan)
+        # Models sometimes write HTML entities ("21&deg;C"); the speaker would read them out.
+        return plan.model_copy(update={"summary": html.unescape(plan.summary), "done_message": html.unescape(plan.done_message),
+                                       "steps": [html.unescape(x) for x in plan.steps]})
 
     def next_turn(self, plan: Plan, history: list[str], screen: ScreenState, note: str = "",
                   with_image: bool = False, think_hard: bool = False) -> Turn:
@@ -117,4 +123,7 @@ class Brain:
             + f"\nScreen:\n{screen_text(screen)}",
             *images(screen.screenshot_b64 if with_image else None),
         ]
-        return self.g.structured(self.operator_models, OPERATOR, parts, Turn, thinking="MEDIUM" if think_hard else self.operator_thinking)
+        turn = self.g.structured(self.operator_models, OPERATOR, parts, Turn,
+                                 thinking="MEDIUM" if think_hard else self.operator_thinking)
+        return turn.model_copy(update={"message": html.unescape(turn.message), "actions": [
+            a.model_copy(update={"intent": html.unescape(a.intent)}) for a in turn.actions]})

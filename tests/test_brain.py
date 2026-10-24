@@ -250,3 +250,27 @@ def test_payment_app_is_never_sent_to_the_brain():
     report = runner(g, phone, con).run("x")
     assert report.outcome == "stopped_by_user"
     assert [c[0] for c in g.calls] == ["Plan"]
+
+
+def test_a_sleeping_locked_phone_is_woken_and_the_user_unlocks_it():
+    class LockedPhone(FakePhone):
+        wakes = 0
+
+        def wake(self):
+            self.wakes += 1
+            return {"ok": True, "locked": self.wakes == 1}
+
+    g = FakeGemini(plan("set_alarm", [("hour", "7")]))
+    phone = LockedPhone(HOME)
+    con = FakeConsole(answers=[True, True])
+    assert runner(g, phone, con).run("alarm").outcome == "done"
+    assert con.asked[0] == "Please unlock your phone, then press the button." and phone.alarms == [(7, 0, "")]
+    stop = FakeConsole(answers=[False])
+    assert runner(FakeGemini(), LockedPhone(HOME), stop).run("alarm").outcome == "stopped_by_user"
+
+
+def test_html_entities_from_the_model_are_not_read_aloud():
+    g = FakeGemini(plan(), turn(done=True, success=True, message="It is 21&deg;C &amp; cloudy."))
+    con = FakeConsole()
+    runner(g, FakePhone(HOME), con).run("weather")
+    assert con.said[-1] == "It is 21°C & cloudy."

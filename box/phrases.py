@@ -26,6 +26,7 @@ PHRASES = {
         "charging": "It is charging.",
         "volume": "The volume is now at {percent} percent.",
         "outdated": "{app} on this phone needs an update first. Please update it from the Play Store.",
+        "unlock": "Please unlock your phone, then press the button.",
     },
     "hi-IN": {
         "thinking": "एक पल, सोच रहा हूँ…",
@@ -52,6 +53,7 @@ PHRASES = {
         "charging": "फ़ोन चार्ज हो रहा है।",
         "volume": "आवाज़ अब {percent} प्रतिशत पर है।",
         "outdated": "इस फ़ोन पर {app} को पहले अपडेट करना होगा। कृपया Play Store से अपडेट करें।",
+        "unlock": "कृपया अपना फ़ोन अनलॉक करें, फिर बटन दबाएँ।",
     },
     "kn-IN": {
         "thinking": "ಒಂದು ಕ್ಷಣ, ಯೋಚಿಸುತ್ತಿದ್ದೇನೆ…",
@@ -78,6 +80,7 @@ PHRASES = {
         "charging": "ಫೋನ್ ಚಾರ್ಜ್ ಆಗುತ್ತಿದೆ.",
         "volume": "ಧ್ವನಿ ಈಗ ಶೇಕಡಾ {percent} ಇದೆ.",
         "outdated": "ಈ ಫೋನ್‌ನಲ್ಲಿ {app} ಅನ್ನು ಮೊದಲು ಅಪ್‌ಡೇಟ್ ಮಾಡಬೇಕು. ದಯವಿಟ್ಟು Play Store ನಲ್ಲಿ ಅಪ್‌ಡೇಟ್ ಮಾಡಿ.",
+        "unlock": "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಫೋನ್ ಅನ್‌ಲಾಕ್ ಮಾಡಿ, ನಂತರ ಬಟನ್ ಒತ್ತಿ.",
     },
 }
 

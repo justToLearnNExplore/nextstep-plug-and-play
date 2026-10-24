@@ -125,7 +125,9 @@ class AndroidAdbDriver:
             self.width, self.height = d["w"], d["h"]  # follows rotation
             package, nodes, secure = d["package"], d["nodes"], d["secure"]
         else:
-            xml = self.shell.run(f"uiautomator dump {DUMP_PATH} >/dev/null 2>&1; cat {DUMP_PATH}")
+            # Old dump removed first: on a moving screen (a running timer) the dump fails, and the box
+            # must then see nothing (and take a screenshot), not the previous screen.
+            xml = self.shell.run(f"rm -f {DUMP_PATH}; uiautomator dump {DUMP_PATH} >/dev/null 2>&1; cat {DUMP_PATH} 2>/dev/null")
             package, nodes, secure = parse_ui_xml(xml)
         shot = self._screenshot_b64() if with_screenshot else None
         return ScreenState(package=package, width=self.width, height=self.height, nodes=nodes,
@@ -164,6 +166,18 @@ class AndroidAdbDriver:
             if now == last:
                 return
             last = now
+
+    def wake(self) -> dict[str, Any]:
+        """Screen on and past a lock screen without a PIN; locked=True means the user must unlock it.
+        A sleeping phone ignores every tap, and phones are usually asleep when someone asks for help."""
+        if "mWakefulness=Awake" not in self.shell.run("dumpsys power | grep mWakefulness="):
+            self.shell.run("input keyevent 224")  # KEYCODE_WAKEUP: turns the screen on, never off
+            self.settle()
+        if "mIsShowing=true" in self.shell.run("dumpsys window | grep mIsShowing="):
+            self.shell.run("wm dismiss-keyguard")
+            self.settle()
+            return {"ok": True, "locked": "mIsShowing=true" in self.shell.run("dumpsys window | grep mIsShowing=")}
+        return {"ok": True, "locked": False}
 
     # ---- hands --------------------------------------------------------------------------------
 

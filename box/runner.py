@@ -129,8 +129,19 @@ class Runner:
             report.wall_s = time.perf_counter() - report.started
         return report
 
+    def _awake(self) -> bool:
+        """Wakes the phone; if a PIN lock is showing, the user unlocks it. False = they said stop."""
+        if not hasattr(self.phone, "wake") or not self.phone.wake().get("locked"):  # type: ignore[attr-defined]
+            return True
+        if self.ui.ask(phrase(self.lang, "unlock"), yes="Done", no="Stop"):
+            return True
+        self.ui.say(phrase(self.lang, "stopped"))
+        return False
+
     def _run(self, goal: str, report: RunReport) -> str:
         self.ui.status(phrase(self.lang, "thinking"))
+        if not self._awake():
+            return "stopped_by_user"
         screen = self.phone.capture(False)
         try:
             plan, report.plan_ms = timed(self.brain.plan, goal, screen)
@@ -175,6 +186,8 @@ class Runner:
         want_image = True  # the first look includes a screenshot; later ones only when needed
         for _ in range(self.cfg.max_turns):
             t = StepTiming()
+            if not self._awake():  # the screen may have timed out while the brain was thinking
+                return "stopped_by_user"
             if screen is None or (want_image and not screen.screenshot_b64):
                 screen, t.capture_ms = timed(self.phone.capture, want_image)
             if screen.package in PAYMENT_APPS:
