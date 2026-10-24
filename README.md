@@ -225,5 +225,5 @@ So the box now tries **3 Flash Preview, 3.6 Flash, 3.5 Flash, then 2.5 Flash** b
 
 1. **Milestone 1** (now): box software + Android emulator ✅ · a real iPhone through iPhone Mirroring ✅ (typing English only) · iOS Simulator (after Xcode is installed)
 2. Speed: box brain with batches + on-box checks ✅ · playbooks ✅ · faster settle ✅ · Android helper app (screen in 20 ms, any-language typing, one-step alarms) ✅ · one-step calls, messages, directions, volume, battery ✅ · voice: plug in and talk ✅ · streaming voice
-3. Hardware: Pi Zero 2 W / Radxa Zero 3W as USB mouse/keyboard + AirPlay receiver; mic, speaker, big button
+3. Hardware: the first box on a Raspberry Pi Zero 2 W, Android first (parts, wiring and setup: [HARDWARE.md](HARDWARE.md)); then iPhone (USB mouse/keyboard + AirPlay receiver)
 4. Cheaper dongle (ESP32-S3 / P4) with the brain running on a phone or a small hub
