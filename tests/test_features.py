@@ -123,3 +123,56 @@ def test_links_inside_messages_are_never_tapped_unless_official():
     assert gate(act("tap", 1, "http://sbi-kyc-update.in/verify"), link, SCAM_SMS, "en-IN")[0] == "blocked"
     real = screen(node("Login at https://www.onlinesbi.sbi", click=True), package="com.google.android.apps.messaging")
     assert gate(act("tap", 0, "Login at https://www.onlinesbi.sbi"), real.nodes[0], real, "en-IN")[0] == "auto"
+
+
+def test_a_rate_us_pop_up_is_closed_without_the_ai():
+    from test_brain import turn
+    rate = screen(node("Enjoying Blinkit? Rate us!"), node("Rate now", click=True), node("Not now", (0, 1500, 500, 1600), click=True))
+    g = FakeGemini(plan(), turn(done=True, success=True, message="ok"))
+    phone = FakePhone(rate, HOME)
+    assert runner(g, phone).run("x").outcome == "done"
+    assert phone.done == [("click", {"x": 250, "y": 775})]  # 'Not now', never 'Rate now'
+    assert [c[0] for c in g.calls] == ["Plan", "Turn"] and "closed a pop-up" in g.calls[1][1][0]
+
+
+def test_routine_slots_and_finding_the_right_add_button():
+    from box.brain.routines import fill, find, templatize
+    assert templatize("Amul Taaza milk 1 L", {"item": "milk"}) == "Amul Taaza {item} 1 L"
+    assert fill("Amul Taaza {item} 1 L", {"item": "curd"}) == "Amul Taaza curd 1 L"
+    shelf = screen(node("Amul Curd 1 L", (0, 400, 700, 500)), node("ADD", (700, 400, 1000, 500), click=True),
+                   node("Mother Dairy Curd", (0, 1400, 700, 1500)), node("ADD", (700, 1400, 1000, 1500), click=True))
+    assert find(shelf, "ADD", "Amul curd 1 L")["b"][1] == 400
+    assert find(shelf, "ADD", "Amul bread 1 L") is None  # that product isn't here: the AI looks
+
+
+def shop(item: str):
+    search = screen(node("Search", (0, 0, 1000, 200), click=True, edit=True), package="com.shop")
+    typed = screen(node(item, (0, 0, 1000, 200), edit=True, focus=True), package="com.shop")
+    results = screen(node(f"Amul {item.title()} 1 L", (0, 400, 700, 500)), node("ADD", (700, 400, 1000, 500), click=True),
+                     node("Mother Dairy Ghee", (0, 1400, 700, 1500)), node("ADD", (700, 1400, 1000, 1500), click=True),
+                     package="com.shop")
+    added = screen(node(f"Amul {item.title()} 1 L"), node("1"), node("View cart", click=True), package="com.shop")
+    return search, typed, results, added
+
+
+def test_a_task_that_worked_is_replayed_next_time_with_new_details():
+    from test_brain import act, turn
+    p1 = plan("open_app", [("app", "Shop"), ("item", "milk")]).model_copy(update={"routine": "shop_add_item"})
+    g1 = FakeGemini(p1, turn(act("tap", 0, "Search"), act("type", -1, text="milk")), turn(act("tap", 1, "ADD")),
+                    turn(done=True, success=True, message="Milk added."))
+    first = runner(g1, FakePhone(HOME, *shop("milk")))
+    assert first.run("add milk").outcome == "done"
+    steps = first.routines.get("shop_add_item")["steps"]
+    assert [(s["kind"], s.get("label", s.get("text")), s.get("context", "")) for s in steps] == [
+        ("tap", "Search", ""), ("type", "{item}", ""), ("tap", "ADD", "Amul {item} 1 L")]
+
+    p2 = plan("open_app", [("app", "Shop"), ("item", "curd")]).model_copy(update={"routine": "shop_add_item"})
+    g2 = FakeGemini(p2, turn(done=True, success=True, message="Curd added."))
+    phone = FakePhone(HOME, *shop("curd"))
+    second = runner(g2, phone)
+    second.routines = first.routines
+    assert second.run("add curd").outcome == "done"
+    assert [c[0] for c in g2.calls] == ["Plan", "Turn"]  # no step-by-step AI: one look to check the result
+    assert ("type", {"text": "curd", "press_enter": False}) in phone.done
+    assert phone.done[-1] == ("click", {"x": 850, "y": 225})  # the ADD next to Amul Curd
+    assert "from the saved routine" in g2.calls[1][1][0]

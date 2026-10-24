@@ -28,7 +28,10 @@ class Plan(BaseModel):
         "scam_check (no params), "
         "open_link (param url), "
         "web_search (param query), open_app (param app).")
-    params: list[Param] = Field(description="Playbook parameters, e.g. [{name: 'hour', value: '7'}].")
+    params: list[Param] = Field(description="Playbook parameters, e.g. [{name: 'hour', value: '7'}]; for a task done "
+                                "step by step, its details (e.g. [{name: 'item', value: 'milk'}]).")
+    routine: str = Field(default="", description="For a task done step by step in an app: a short snake_case name for "
+                         "this kind of task, the same every time it is asked (e.g. 'blinkit_add_item'); else ''.")
     goal: str = Field(description="Precise English instruction for the phone operator, all the way to the result.")
     done_message: str = Field(description="What to say when it worked, user's language, e.g. 'Your alarm is set for 7 AM.'")
 

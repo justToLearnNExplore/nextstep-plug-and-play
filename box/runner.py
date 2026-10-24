@@ -15,6 +15,8 @@ from typing import Any
 
 from .brain.brain import Brain, screen_text
 from .brain.playbooks import before_approval, run_playbook
+from .brain.popups import dismiss_button
+from .brain.routines import Routines, details, find, fill, step_from
 from .brain.safety import gate, node_text, payment_screen
 from .brain.schemas import Action, Plan
 from .config import Config
@@ -110,6 +112,7 @@ class Runner:
         self.cfg, self.brain, self.phone, self.ui = cfg, brain, phone, console
         self.lang = cfg.language
         self.trace_path: Path | None = None
+        self.routines = Routines(Path(cfg.state_dir) / "routines.json" if trace else None)
         if trace:
             runs = Path(cfg.state_dir) / "runs"
             runs.mkdir(parents=True, exist_ok=True)
@@ -186,9 +189,76 @@ class Runner:
     # ---- see → decide → act -------------------------------------------------------------------
 
     def _operate(self, plan: Plan, report: RunReport) -> str:
+        """A learned routine first (if this kind of task worked before), then step by step with the AI,
+        which also checks the result. A run that worked teaches (or reinforces) the routine."""
         history: list[str] = []
+        record: list[dict[str, Any]] = []
+        params = details({p.name: p.value for p in plan.params})
+        key = plan.routine.strip()
+        recipe = self.routines.get(key) if key else None
+        if recipe and (ending := self._replay(key, recipe, params, history, record)):
+            return ending
+        outcome = self._steps(plan, report, history, record, params)
+        if key and outcome == "done":
+            self.routines.learn(key, params, record)
+        elif recipe:
+            self.routines.failed(key)
+        return outcome
+
+    def _replay(self, key: str, recipe: dict[str, Any], params: dict[str, str], history: list[str],
+                record: list[dict[str, Any]]) -> str:
+        """Runs a learned recipe through the safety gates; stops at the first step that doesn't match the
+        screen, and the AI carries on from there. Returns an outcome only if the user stopped it."""
+        done = 0
+        for step in recipe["steps"]:
+            screen = self.phone.capture(False)
+            if payment_screen(screen) or screen.has_secure_field:
+                break
+            if step.get("package") and screen.package != step["package"] and step["kind"] != "open_app":
+                break
+            a, node = self._recipe_action(step, screen, params)
+            if a is None:
+                break
+            xy = center(node, screen) if node is not None else None
+            g, prompt = gate(a, node, screen, self.lang)
+            if g in ("blocked", "private"):
+                break
+            if g == "confirm" and not self.ui.ask(prompt):
+                self.ui.say(phrase(self.lang, "stopped"))
+                return "declined_step"
+            self.ui.status(a.intent)
+            if not self._act(a, node, xy, screen).get("ok"):
+                break
+            history.append(f"{a.intent} (from the saved routine)")
+            record.append(step)
+            done += 1
+            if g == "confirm":
+                break  # after an irreversible step the AI always looks again
+        self._trace("routine", key=key, replayed=done, steps=len(recipe["steps"]))
+        return ""
+
+    @staticmethod
+    def _recipe_action(step: dict[str, Any], screen: ScreenState,
+                       params: dict[str, str]) -> tuple[Action | None, dict[str, Any] | None]:
+        """This screen's action for a recipe step, or (None, None) if it doesn't fit."""
+        texts = {k: fill(step.get(k, ""), params) for k in ("label", "context", "text")}
+        if any("{" in v for v in texts.values()):
+            return None, None  # the recipe needs a detail this task doesn't have
+        node = None
+        if step["kind"] in NEEDS_TARGET:
+            node = find(screen, texts["label"], texts["context"])
+            if node is None:
+                return None, None
+        what = label_of(node) if node is not None else texts["text"] or step["kind"]
+        return Action(kind=step["kind"], element=-1, label=label_of(node) if node is not None else "", x=-1, y=-1,
+                      text=texts["text"], press_enter=bool(step.get("enter")), direction=step.get("direction", "none"),
+                      intent=f"{step['kind']} {what}", announce=False, expect="", irreversible=False), node
+
+    def _steps(self, plan: Plan, report: RunReport, history: list[str], record: list[dict[str, Any]],
+               params: dict[str, str]) -> str:
         no_effect: dict[str, int] = {}
         visits: dict[str, int] = {}
+        dismissed: set[str] = set()
         note, think_hard, screen = "", False, None
         want_image = True  # the first look includes a screenshot; later ones only when needed
         for _ in range(self.cfg.max_turns):
@@ -208,6 +278,18 @@ class Runner:
             if len(screen.nodes) < 5 and not screen.screenshot_b64:  # little to read: look at the pixels
                 screen, ms = timed(self.phone.capture, True)
                 t.capture_ms += ms
+            if (button := dismiss_button(screen)) and screen_sig(screen) not in dismissed:
+                dismissed.add(screen_sig(screen))  # once per screen, so a stubborn pop-up goes to the AI
+                act = Action(kind="tap", element=-1, label=label_of(button), x=-1, y=-1, text="", press_enter=False,
+                             direction="none", intent=f"Closing the pop-up ({label_of(button)})", announce=False,
+                             expect="", irreversible=False)
+                if gate(act, button, screen, self.lang)[0] == "auto":
+                    self.ui.status(act.intent)
+                    result = self.phone.execute("click", dict(zip("xy", center(button, screen))), screen)
+                    self._trace("popup", label=label_of(button), result=result)
+                    history.append(f"closed a pop-up ('{label_of(button)}') without the AI")
+                    screen = None
+                    continue
             with_image = bool(screen.screenshot_b64) and not screen.has_secure_field
             sig = screen_sig(screen)
             visits[sig] = visits.get(sig, 0) + 1
@@ -237,7 +319,7 @@ class Runner:
                 self.ui.say(turn.message or phrase(self.lang, "not_finished"))
                 return "not_possible"
 
-            screen, note, ending, think_hard = self._run_batch(turn.actions, screen, history, no_effect, t)
+            screen, note, ending, think_hard = self._run_batch(turn.actions, screen, history, no_effect, t, record, params)
             want_image = bool(note)  # something unexpected: let the brain see the screen next time
             report.steps.append(t)
             self.ui.timing(t)
@@ -246,8 +328,9 @@ class Runner:
         self.ui.say(phrase(self.lang, "too_long"))
         return "too_long"
 
-    def _run_batch(self, actions: list[Action], screen: ScreenState, history: list[str],
-                   no_effect: dict[str, int], t: StepTiming) -> tuple[ScreenState | None, str, str, bool]:
+    def _run_batch(self, actions: list[Action], screen: ScreenState, history: list[str], no_effect: dict[str, int],
+                   t: StepTiming, record: list[dict[str, Any]] | None = None,
+                   params: dict[str, str] | None = None) -> tuple[ScreenState | None, str, str, bool]:
         """Runs the brain's actions in order, checking each one on the box.
         Returns (latest screen or None, note for the brain, outcome if the task must end, think hard)."""
         first_screen = screen
@@ -294,6 +377,9 @@ class Runner:
                     return None, "", "stuck", False
                 return screen, (f"'{a.intent or a.kind}' changed nothing on the screen.{rest} Try something else "
                                 "(another element, scroll, or back)."), "", no_effect[key] >= 2
+            if record is not None and (step := step_from(a.kind, node, a.text, a.direction, a.press_enter, before,
+                                                         params or {})):
+                record.append(step)  # it did something: part of the recipe if the task works out
             if a.expect:
                 if not visible(a.expect, screen):
                     return screen, (f"After '{a.intent or a.kind}', '{a.expect}' is not on the screen. "

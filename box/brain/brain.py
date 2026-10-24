@@ -42,6 +42,9 @@ Rules:
 - For call and send_message: contact = the name or word they used for the person, as said (e.g. 'Ravi', 'Doctor',
   'बेटा'); contact_latin = the same in Latin letters if it was said in another script; or number = the digits
   if they said a number. The box looks the person up in the phone's contacts itself.
+- A task with no playbook that does it all (none, open_app, open_link, web_search) gets a `routine` name for its
+  kind (e.g. blinkit_add_item, settings_dark_theme), the same each time, with its details as params
+  (item=milk): the box replays what worked last time.
 - `goal` must go all the way to the result (the box asks the user before any irreversible tap).
 - Refuse anything harmful, sending money to people, or sharing OTPs/PINs/passwords.
 - A spoken request comes as a recording: write what they said in `heard`. If it holds no request for the
