@@ -12,6 +12,8 @@ class Param(BaseModel):
 
 
 class Plan(BaseModel):
+    heard: str = Field(default="", description="What the user asked, in their own words and language (written out "
+                       "from the recording when the request was spoken). Empty if the recording holds no request.")
     summary: str = Field(description="ONE short question in the user's language naming the concrete result, e.g. 'Shall I set an alarm for 7 AM?'. Read aloud, under 20 words.")
     steps: list[str] = Field(description="2-4 very short concrete actions, user's language, shown on screen.")
     refused: bool = Field(description="True for anything harmful, moving money to people, or sharing OTPs/PINs/passwords.")
@@ -27,6 +29,11 @@ class Plan(BaseModel):
     params: list[Param] = Field(description="Playbook parameters, e.g. [{name: 'hour', value: '7'}].")
     goal: str = Field(description="Precise English instruction for the phone operator, all the way to the result.")
     done_message: str = Field(description="What to say when it worked, user's language, e.g. 'Your alarm is set for 7 AM.'")
+
+
+class Reply(BaseModel):
+    """A spoken answer to one of the box's yes/no questions."""
+    answer: Literal["yes", "no", "unclear"]
 
 
 class Action(BaseModel):

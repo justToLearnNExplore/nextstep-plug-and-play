@@ -121,10 +121,11 @@ class Runner:
             with self.trace_path.open("a") as f:
                 f.write(json.dumps({"t": round(time.time(), 3), "event": event, **data}, ensure_ascii=False) + "\n")
 
-    def run(self, goal: str) -> RunReport:
+    def run(self, goal: str = "", speech_wav_b64: str | None = None) -> RunReport:
+        """Does what was asked: typed (`goal`) or spoken (a recording, heard by the brain itself)."""
         report = RunReport(goal=goal)
         try:
-            report.outcome = self._run(goal, report)
+            report.outcome = self._run(goal, report, speech_wav_b64)
         finally:
             report.wall_s = time.perf_counter() - report.started
         return report
@@ -138,18 +139,24 @@ class Runner:
         self.ui.say(phrase(self.lang, "stopped"))
         return False
 
-    def _run(self, goal: str, report: RunReport) -> str:
+    def _run(self, goal: str, report: RunReport, speech_wav_b64: str | None = None) -> str:
         self.ui.status(phrase(self.lang, "thinking"))
         if not self._awake():
             return "stopped_by_user"
         screen = self.phone.capture(False)
         try:
-            plan, report.plan_ms = timed(self.brain.plan, goal, screen)
+            plan, report.plan_ms = timed(self.brain.plan, goal, screen, speech_wav_b64)
         except RuntimeError as e:
             self.ui.status(f"({str(e)[:200]})")
             self.ui.say(phrase(self.lang, "no_brain"))
             return "plan_failed"
-        self._trace("plan", goal=goal, ms=report.plan_ms, plan=plan.model_dump())
+        self._trace("plan", goal=goal, spoken=bool(speech_wav_b64), ms=report.plan_ms, plan=plan.model_dump())
+        if speech_wav_b64:
+            report.goal = plan.heard
+            if not plan.goal.strip():  # nothing that asks for something: noise, TV, people talking
+                self.ui.say(phrase(self.lang, "not_understood"))
+                return "not_understood"
+            self.ui.status(f"🎤 {plan.heard}")
         if plan.refused:
             self.ui.say(plan.summary)
             return "refused"

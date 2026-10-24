@@ -12,7 +12,7 @@ from typing import Any, TypeVar
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from .llm import Image
+from .llm import Audio, Image
 
 T = TypeVar("T", bound=BaseModel)
 BASE_URL = "https://ai-gateway.vercel.sh/v1"
@@ -21,9 +21,10 @@ MAX_WAIT_S = 30.0
 
 
 def rate_limit_wait(r: httpx.Response) -> float:
-    """How long a 429 asks to wait (Retry-After), else 12 s (a 5-a-minute limit), at most MAX_WAIT_S."""
+    """How long a 429 asks to wait (Retry-After), else 12 s (a 5-a-minute limit). More than MAX_WAIT_S
+    means a daily limit: not worth waiting for."""
     try:
-        return min(MAX_WAIT_S, max(1.0, float(r.headers.get("retry-after", "12"))))
+        return max(1.0, float(r.headers.get("retry-after", "12")))
     except ValueError:
         return 12.0
 
@@ -63,6 +64,15 @@ def _json_text(text: str) -> str:
     return text
 
 
+def part(p: object) -> dict[str, Any]:
+    """One piece of the user message. Recordings go as a file: the gateway refuses OpenAI's input_audio."""
+    if isinstance(p, Image):
+        return {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{p.jpeg_b64}"}}
+    if isinstance(p, Audio):
+        return {"type": "file", "file": {"data": p.wav_b64, "media_type": "audio/wav", "filename": "speech.wav"}}
+    return {"type": "text", "text": str(p)}
+
+
 class Gateway:
     def __init__(self, key: str, timeout_s: float = 30.0, transport: httpx.BaseTransport | None = None):
         self.http = httpx.Client(base_url=BASE_URL, headers={"Authorization": f"Bearer {key}"},
@@ -76,8 +86,7 @@ class Gateway:
     def structured(self, models: list[str], system: str, parts: list, schema: type[T], thinking: str = "LOW") -> T:
         if schema not in self._schemas:
             self._schemas[schema] = json_schema(schema)
-        content = [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{p.jpeg_b64}"}}
-                   if isinstance(p, Image) else {"type": "text", "text": str(p)} for p in parts]
+        content = [part(p) for p in parts]
         body = {
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": content}],
             "response_format": {"type": "json_schema",
@@ -113,8 +122,10 @@ class Gateway:
                 if r.status_code != 200:
                     last = f"{model_id(model)}: HTTP {r.status_code} {r.text[:200]}"
                     wait = rate_limit_wait(r) if r.status_code == 429 else 0.0
-                    if r.status_code == 403 and "do not have access to this model" in r.text:
-                        self.unavailable.add(model_id(model))  # skip it from now on
+                    if (r.status_code == 403 and "do not have access to this model" in r.text) or wait > MAX_WAIT_S:
+                        self.unavailable.add(model_id(model))  # skip it from now on (or for today)
+                        wait = 0.0
+                        break
                     if r.status_code in RETRY and attempt == 0:
                         time.sleep(0.8)
                         continue

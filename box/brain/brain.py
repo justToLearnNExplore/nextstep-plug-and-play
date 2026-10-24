@@ -11,8 +11,8 @@ Speed-first design:
 import html
 
 from ..drivers.base import ScreenState
-from .llm import images
-from .schemas import Plan, Turn
+from .llm import Audio, images
+from .schemas import Plan, Reply, Turn
 
 # Fastest on a free Google AI Studio key (3.8 / 3.7 Flash are mostly busy there: 503/504 after 8-29 s;
 # 2.5 is closed to new keys). On Vercel AI Gateway's free tier only 2.5 is allowed: the box skips the
@@ -41,6 +41,14 @@ Rules:
   if they said a number. The box looks the person up in the phone's contacts itself.
 - `goal` must go all the way to the result (the box asks the user before any irreversible tap).
 - Refuse anything harmful, sending money to people, or sharing OTPs/PINs/passwords.
+- A spoken request comes as a recording: write what they said in `heard`. If it holds no request for the
+  phone (silence, noise, a TV, people talking to each other), leave `heard` and `goal` empty.
+""".strip()
+
+LISTENER = """
+An older adult was asked a yes/no question by their phone helper and answered aloud (the recording).
+answer=yes for yes, okay, sure, go ahead, done, haan, ji, theek hai, ho gaya, houdu, sari, aytu;
+answer=no for no, stop, cancel, wait, nahin, mat karo, illa, beda; otherwise unclear.
 """.strip()
 
 OPERATOR = """
@@ -109,12 +117,20 @@ class Brain:
         name = LANGS.get(self.language, f"the language with tag {self.language}")
         return f"Write all user-facing text only in {name}; never mix languages."
 
-    def plan(self, goal: str, screen: ScreenState) -> Plan:
-        prompt = f"{self._lang()}\nUser request: {goal}\nCurrent screen:\n{screen_text(screen, 40)}"
-        plan = self.g.structured(self.planner_models, PLANNER, [prompt], Plan)
+    def plan(self, goal: str, screen: ScreenState, speech_wav_b64: str | None = None) -> Plan:
+        """The plan for a typed request, or for a spoken one (the recording goes to the model as it is)."""
+        request = "in the attached recording" if speech_wav_b64 else goal
+        prompt = f"{self._lang()}\nUser request: {request}\nCurrent screen:\n{screen_text(screen, 40)}"
+        parts: list = [prompt] + ([Audio(speech_wav_b64)] if speech_wav_b64 else [])
+        plan = self.g.structured(self.planner_models, PLANNER, parts, Plan)
         # Models sometimes write HTML entities ("21&deg;C"); the speaker would read them out.
         return plan.model_copy(update={"summary": html.unescape(plan.summary), "done_message": html.unescape(plan.done_message),
                                        "steps": [html.unescape(x) for x in plan.steps]})
+
+    def hear_answer(self, speech_wav_b64: str, question: str) -> str:
+        """'yes', 'no' or 'unclear' for a spoken answer to `question`."""
+        reply = self.g.structured(self.planner_models, LISTENER, [f"Question: {question}", Audio(speech_wav_b64)], Reply)
+        return reply.answer
 
     def next_turn(self, plan: Plan, history: list[str], screen: ScreenState, note: str = "",
                   with_image: bool = False, think_hard: bool = False) -> Turn:

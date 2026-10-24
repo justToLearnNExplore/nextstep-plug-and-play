@@ -22,6 +22,12 @@ def images(jpeg_b64: str | None) -> list[Image]:
     return [Image(jpeg_b64)] if jpeg_b64 else []
 
 
+@dataclass(frozen=True)
+class Audio:
+    """A recording of the user speaking (16 kHz mono WAV)."""
+    wav_b64: str
+
+
 class NoKey(RuntimeError):
     pass
 

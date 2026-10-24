@@ -86,6 +86,17 @@ def test_a_rate_limit_on_every_model_is_waited_out_once(monkeypatch):
     assert 7.0 in waits and fake.tried == ["m", "m", "m"]
 
 
+def test_a_model_whose_daily_limit_is_used_up_is_left_out_without_waiting(monkeypatch):
+    waits = []
+    monkeypatch.setattr(gemini_mod.time, "sleep", waits.append)
+    daily = errors.APIError(429, {"error": {"code": 429, "message": "x", "status": "X", "details": [
+        {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "47997s"}]}})
+    g, fake = client({"preview": [daily], "next": [ok("a"), ok("b")]})
+    g.structured(["preview", "next"], "sys", ["hi"], Answer)
+    g.structured(["preview", "next"], "sys", ["hi"], Answer)
+    assert fake.tried == ["preview", "next", "next"] and waits == []
+
+
 def test_when_every_model_fails_the_box_gets_a_runtime_error():
     g, _ = client({"a": [api_error(404)], "b": [httpx.ReadTimeout("slow")]})
     with pytest.raises(RuntimeError):

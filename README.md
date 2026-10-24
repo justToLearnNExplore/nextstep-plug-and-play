@@ -23,6 +23,8 @@ box/
   runner.py            agent loop: plan → one yes → playbook or see / decide / act, checked on the box
   phrases.py           everything the box says by itself, in English, Hindi and Kannada
   console.py           stand-in for the box's button, LED and speaker (terminal + macOS `say`)
+  voice.py             the box's ears (Mac microphone via ffmpeg) and voice (Indian macOS voices); spoken yes/no
+  serve.py             plug in and talk: waits for the phone, says hello, listens, does it, listens again
   brain/
     llm.py             picks the model route from the keys on the box
     gemini.py          Gemini direct (Google AI Studio key): retry once, then fall back to the next model
@@ -68,7 +70,7 @@ If both are present the box uses Gemini direct (one network hop fewer); `NEXTSTE
 
 ## How the brain stays fast
 
-1. **Plan once.** One Gemini call turns the request into a yes/no question and a precise goal, and picks a playbook if one fits.
+1. **Plan once.** One Gemini call turns the request into a yes/no question and a precise goal, and picks a playbook if one fits. A spoken request goes to Gemini as the recording itself: no separate speech-to-text step, and Hindi or Kannada is understood as it was said.
 2. **Playbooks skip the AI.** Common requests are done by the box itself, checked on the phone, with no step-by-step AI:
    - **Alarms, reminders, timers:** set in one step by the helper app through the Clock's own "set alarm" / "set timer" intents (without the helper, the box opens the right Clock screen).
    - **Calls:** the box looks the person up in the phone's contacts itself (the list never goes to Gemini), asks once with the exact name and number ("Call Ravi Kumar on +91 98450 12345?"), starts the call and checks the phone is calling. Several people with that name: it asks about each in turn. Numbers Android won't call directly (emergency numbers) are put on the dialer, ready for the green button.
@@ -96,6 +98,25 @@ Plain ADB has hard limits: `uiautomator dump` starts a new process for every loo
 - **Falls back by itself.** If it can't be installed or stops, the box carries on with plain ADB; `--no-helper` forces that.
 
 It is signed with a key made on first build in `~/.nextstep-box/` (never in the repo). The box reinstalls it whenever its version changes.
+
+## Plug in and talk
+
+```bash
+NEXTSTEP_BOX_LLM=gateway .venv/bin/python -m box --serve --phone android
+```
+
+The box waits for a phone. When one is plugged in (`adb` sees it; on first use it asks the person to tap Allow for USB debugging) it says hello and listens. The person just speaks; the box asks its one question ("Shall I start a timer for 2 minutes?"), hears "yes" / "haan" / "houdu" / "no" (or "done" after a private step), does it, says what happened, and listens again. Unplugging the phone ends the session. `--hear request.wav` does one spoken request from a recording, for testing without a microphone.
+
+- **Ears:** the Mac's microphone (the real box: a small mic). Whether someone is speaking is decided on the box from loudness alone (a quiet room measures ~80, speech 2,700–5,700), recording runs from just before the first word to a second of quiet, and nothing is sent while it is quiet.
+- **Understanding:** the recording goes to Gemini with the planning prompt; talk that isn't a request (a TV, people talking) is not acted on ("Sorry, I didn't catch that"). Spoken yes/no answers are one small call each.
+- **Voice:** macOS `say` with Indian voices, Rishi (English) and Lekha (Hindi); macOS has no Kannada voice yet. The box finishes speaking before it listens, so it doesn't hear itself.
+- **Needs:** Microphone access for the app that runs the box. Use Vercel (or a paid Google key) for a real person's voice, not the free Google key. Through Vercel a recording goes as a file (its OpenAI-style `input_audio` is refused).
+
+| Spoken request (Android 10 emulator, Vercel, `--yes`) | Time | Result |
+|---|---|---|
+| "Set an alarm for seven in the morning" (recording, Rishi voice) | 5.8 s | heard right, 1 Gemini call, alarm set |
+| "सुबह सात बजे का अलार्म लगा दो" (recording, Lekha voice, box in Hindi) | 5.2 s | heard right, asked and answered in Hindi, alarm set |
+| `--serve`: "Start a timer for two minutes" said aloud near the Mac | ready 3.7 s after start; timer running 10.2 s after the speaking began | ~2 s speech + 1 s quiet + 6.3 s to plan and set it; checked on screen |
 
 ## A real iPhone through iPhone Mirroring
 
@@ -175,7 +196,7 @@ Which models a free AI Studio key may use (checked 24 Oct 2026 with one tiny req
 |---|---|---|
 | 3.6 Flash, 3.5 Flash, 3 Flash Preview, 3.1 Flash-Lite | 3.8 Flash (503 after 8 s, 504 after 29 s), 3.7 Flash (504 after 29 s), flash-latest | 2.5 Flash / Flash-Lite / Pro ("no longer available to new users"), every Pro model and gemini-4-argon (no free quota) |
 
-It also allows only about 5 requests a minute per model (the 6th within a minute was refused; a minute later it worked again). The box copes: a model that is refused is never tried again, a busy or slow one rests for 5 minutes and is tried after the others, and only quick failures are retried. The free Vercel tier is the opposite: only 2.5 Flash / Flash-Lite.
+It also allows only about 5 requests a minute per model (the 6th within a minute was refused; a minute later it worked again), and some models only 20 a day (3 Flash Preview ran out the same day; the box then leaves it out until it restarts). The box copes: a model that is refused is never tried again, a busy or slow one rests for 5 minutes and is tried after the others, and only quick failures are retried. The free Vercel tier is the opposite: only 2.5 Flash / Flash-Lite.
 
 Same screens, same prompts, one call at a time (planning: alarm / call / weather; one operator step on the Clock's timer screen):
 
@@ -203,6 +224,6 @@ So the box now tries **3 Flash Preview, 3.6 Flash, 3.5 Flash, then 2.5 Flash** b
 ## Roadmap
 
 1. **Milestone 1** (now): box software + Android emulator ✅ · a real iPhone through iPhone Mirroring ✅ (typing English only) · iOS Simulator (after Xcode is installed)
-2. Speed: box brain with batches + on-box checks ✅ · playbooks ✅ · faster settle ✅ · Android helper app (screen in 20 ms, any-language typing, one-step alarms) ✅ · one-step calls, messages, directions, volume, battery ✅ · streaming voice
+2. Speed: box brain with batches + on-box checks ✅ · playbooks ✅ · faster settle ✅ · Android helper app (screen in 20 ms, any-language typing, one-step alarms) ✅ · one-step calls, messages, directions, volume, battery ✅ · voice: plug in and talk ✅ · streaming voice
 3. Hardware: Pi Zero 2 W / Radxa Zero 3W as USB mouse/keyboard + AirPlay receiver; mic, speaker, big button
 4. Cheaper dongle (ESP32-S3 / P4) with the brain running on a phone or a small hub

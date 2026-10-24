@@ -8,18 +8,33 @@ import sys
 
 
 class Console:
-    def __init__(self, speak: bool = True, auto_yes: bool = False, plan_only: bool = False):
+    def __init__(self, speak: bool = True, auto_yes: bool = False, plan_only: bool = False, voice: str | None = None):
         self.speak_enabled = speak and shutil.which("say") is not None
+        self.voice = voice  # macOS voice for the box's language (Rishi, Lekha); None = the Mac's default
         self.auto_yes = auto_yes
         self.plan_only = plan_only  # testing on a real phone: yes to the plan, no to everything else
-        self._voice: subprocess.Popen | None = None
+        self._speaking: subprocess.Popen | None = None
+
+    def _say(self, text: str) -> list[str]:
+        return ["say", "-r", "185"] + (["-v", self.voice] if self.voice else []) + [text]
 
     def _speak(self, text: str) -> None:
         if not self.speak_enabled or not text:
             return
-        if self._voice and self._voice.poll() is None:
-            self._voice.terminate()  # newest message wins, like the app
-        self._voice = subprocess.Popen(["say", "-r", "185", text])
+        if self._speaking and self._speaking.poll() is None:
+            self._speaking.terminate()  # newest message wins, like the app
+        self._speaking = subprocess.Popen(self._say(text))
+
+    def finish_speaking(self) -> None:
+        """Waits until the box has stopped talking (before it listens, so it doesn't hear itself)."""
+        if self._speaking and self._speaking.poll() is None:
+            self._speaking.wait()
+
+    def speak_now(self, text: str) -> None:
+        """Says `text` after whatever is being said, and returns when done."""
+        self.finish_speaking()
+        if self.speak_enabled and text:
+            subprocess.run(self._say(text))
 
     def status(self, text: str, speak: bool = False) -> None:
         print(f"  · {text}", flush=True)

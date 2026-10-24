@@ -4,7 +4,8 @@ A quick overload (429/5xx) is retried once, then the next model in the list is t
 may not use (403/404, e.g. "no longer available to new users") is never tried again; one that is busy
 or slow (a 503 after seconds, a 504, a timeout) rests for a few minutes and is tried after the others.
 If the last model tried is over its requests-per-minute limit (the free tier allows about 5), the box
-waits as long as Google says (at most 30 s) and tries the list once more.
+waits as long as Google says (at most 30 s) and tries the list once more; a model whose daily limit is
+used up (20 requests a day for some free models) is left out until the box restarts.
 """
 
 import base64
@@ -16,7 +17,7 @@ from google import genai
 from google.genai import errors, types
 from pydantic import BaseModel
 
-from .llm import Image
+from .llm import Audio, Image
 
 T = TypeVar("T", bound=BaseModel)
 RETRY = {429, 500, 502, 503, 504}
@@ -27,12 +28,13 @@ QUICK_S = 3.0  # only a failure this fast is worth one more try on the same mode
 
 
 def rate_limit_wait(e: errors.APIError) -> float:
-    """The wait a 429 asks for (its RetryInfo, e.g. "12s"), else 12 s, at most MAX_WAIT_S."""
+    """The wait a 429 asks for (its RetryInfo, e.g. "12s"), else 12 s. More than MAX_WAIT_S means a
+    daily limit: not worth waiting for."""
     details = (e.details or {}).get("error", {}).get("details", []) if isinstance(e.details, dict) else []
     for d in details:
         if "RetryInfo" in str(d.get("@type", "")):
             try:
-                return min(MAX_WAIT_S, max(1.0, float(str(d.get("retryDelay", "12")).rstrip("s"))))
+                return max(1.0, float(str(d.get("retryDelay", "12")).rstrip("s")))
             except ValueError:
                 break
     return 12.0
@@ -59,8 +61,9 @@ class Gemini:
             response_schema=schema,
             thinking_config=types.ThinkingConfig(thinking_level=thinking),
         )
-        parts = [types.Part.from_bytes(data=base64.b64decode(p.jpeg_b64), mime_type="image/jpeg")
-                 if isinstance(p, Image) else p for p in parts]
+        parts = [types.Part.from_bytes(data=base64.b64decode(p.jpeg_b64), mime_type="image/jpeg") if isinstance(p, Image)
+                 else types.Part.from_bytes(data=base64.b64decode(p.wav_b64), mime_type="audio/wav") if isinstance(p, Audio)
+                 else p for p in parts]
         last: object = None
         for round_ in range(2):
             answer = self._try_models(models, parts, cfg)
@@ -85,8 +88,9 @@ class Gemini:
                 except errors.APIError as e:
                     last = e
                     wait = rate_limit_wait(e) if e.code == 429 else 0.0
-                    if e.code in GONE:
+                    if e.code in GONE or wait > MAX_WAIT_S:  # refused, or today's limit is used up
                         self.gone.add(model)
+                        wait = 0.0
                     elif e.code in RETRY and attempt == 0 and time.monotonic() - t0 < QUICK_S:
                         time.sleep(0.8)
                         continue

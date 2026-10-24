@@ -264,7 +264,7 @@ def test_a_sleeping_locked_phone_is_woken_and_the_user_unlocks_it():
     phone = LockedPhone(HOME)
     con = FakeConsole(answers=[True, True])
     assert runner(g, phone, con).run("alarm").outcome == "done"
-    assert con.asked[0] == "Please unlock your phone, then press the button." and phone.alarms == [(7, 0, "")]
+    assert con.asked[0] == "Please unlock your phone, then say done or press the button." and phone.alarms == [(7, 0, "")]
     stop = FakeConsole(answers=[False])
     assert runner(FakeGemini(), LockedPhone(HOME), stop).run("alarm").outcome == "stopped_by_user"
 
