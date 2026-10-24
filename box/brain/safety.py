@@ -26,6 +26,8 @@ IRREVERSIBLE = re.compile(
 SECRET = re.compile(r"password|passcode|\bpin\b|otp|one.?time|cvv|card number|upi|mpin|पासवर्ड|ओटीपी|ಪಾಸ್‌ವರ್ಡ್", re.I)
 KEYPAD_EDIT = re.compile(r"^(delete|backspace|del|clear|erase)\b", re.I)
 PAYMENT_APPS = {"net.one97.paytm", "com.phonepe.app", "com.google.android.apps.nbu.paisa.user", "in.org.npci.upiapp"}
+# On an iPhone the box can't see which app is open, only its words: a UPI screen is a payment app.
+PAYMENT_WORDS = re.compile(r"\bupi\b", re.I)
 LINK_ALLOWLIST = (
     "https://www.youtube.com/results?search_query=", "https://m.youtube.com/results?search_query=",
     "https://blinkit.com/s/?q=", "https://m.uber.com/ul/?action=setPickup", "https://www.google.com/search?q=",
@@ -47,6 +49,11 @@ def keypad_edit_key(node: dict[str, Any] | None, screen: ScreenState) -> bool:
     return digits >= 8 and bool(KEYPAD_EDIT.match(label))
 
 
+def payment_screen(screen: ScreenState) -> bool:
+    return screen.package in PAYMENT_APPS or (
+        screen.package == "iphone" and any(PAYMENT_WORDS.search(node_text(n)) for n in screen.nodes))
+
+
 def link_allowed(url: str) -> bool:
     return url.startswith(LINK_ALLOWLIST)
 
@@ -56,15 +63,17 @@ def gate(action: Action, node: dict[str, Any] | None, screen: ScreenState, lang:
     Only ever stricter than the model: its `irreversible` flag can add a question, never remove one."""
     if action.kind == "hand_over":
         return "private", action.intent or phrase(lang, "private")
-    if screen.package in PAYMENT_APPS:
+    if payment_screen(screen):
         return "private", phrase(lang, "payment")
     if action.kind == "open_link" and not link_allowed(action.text):
         return "blocked", phrase(lang, "blocked")
     label = f"{node_text(node)} {action.label}"
     if action.kind == "type":
         focused = node if node and node.get("edit") else next((n for n in screen.nodes if n.get("focus") and n.get("edit")), None)
+        # Without field information (an iPhone seen as a picture) any typing on a secret screen is the user's.
+        no_fields = not any(n.get("edit") for n in screen.nodes)
         if (focused and (focused.get("secure") or SECRET.search(f"{label} {node_text(focused)}"))) \
-                or (screen.has_secure_field and action.text.strip().isdigit()):
+                or (screen.has_secure_field and (action.text.strip().isdigit() or no_fields)):
             return "private", phrase(lang, "private")
     if action.kind in ("tap", "long_press"):
         if node and node.get("secure"):

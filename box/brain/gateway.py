@@ -1,7 +1,9 @@
 """Gemini through Vercel AI Gateway's OpenAI-compatible API (https://ai-gateway.vercel.sh/v1).
 
 Free Vercel accounts get $5 of AI Gateway credit every 30 days. One persistent HTTPS connection;
-brief overloads (429/5xx) are retried once, then the next model in the list is tried.
+brief overloads (429/5xx) are retried once, then the next model in the list is tried. If every model
+is over its requests-per-minute limit (the free tier allows 5), the box waits as long as it is told
+(at most 30 s) and tries the list once more.
 """
 
 import time
@@ -15,6 +17,15 @@ from .llm import Image
 T = TypeVar("T", bound=BaseModel)
 BASE_URL = "https://ai-gateway.vercel.sh/v1"
 RETRY = {429, 500, 502, 503, 504}
+MAX_WAIT_S = 30.0
+
+
+def rate_limit_wait(r: httpx.Response) -> float:
+    """How long a 429 asks to wait (Retry-After), else 12 s (a 5-a-minute limit), at most MAX_WAIT_S."""
+    try:
+        return min(MAX_WAIT_S, max(1.0, float(r.headers.get("retry-after", "12"))))
+    except ValueError:
+        return 12.0
 
 
 def model_id(name: str) -> str:
@@ -74,7 +85,22 @@ class Gateway:
             "reasoning": {"effort": thinking.lower(), "exclude": True},
         }
         last: object = None
+        for round_ in range(2):
+            answer = self._try_models(models, body, schema)
+            if not isinstance(answer, tuple):
+                return answer
+            last, wait = answer
+            if not wait or round_:
+                break
+            time.sleep(wait)  # every model is over its per-minute limit: wait once, then try again
+        raise RuntimeError(f"Model unavailable: {last}")
+
+    def _try_models(self, models: list[str], body: dict[str, Any], schema: type[T]) -> T | tuple[object, float]:
+        """The first usable answer, or (last error, seconds to wait if the last refusal was a rate limit)."""
+        last: object = None
+        wait = 0.0
         for model in [m for m in models if model_id(m) not in self.unavailable]:
+            wait = 0.0
             for attempt in range(2):
                 try:
                     r = self.http.post("/chat/completions", json={"model": model_id(model), **body})
@@ -86,6 +112,7 @@ class Gateway:
                     break
                 if r.status_code != 200:
                     last = f"{model_id(model)}: HTTP {r.status_code} {r.text[:200]}"
+                    wait = rate_limit_wait(r) if r.status_code == 429 else 0.0
                     if r.status_code == 403 and "do not have access to this model" in r.text:
                         self.unavailable.add(model_id(model))  # skip it from now on
                     if r.status_code in RETRY and attempt == 0:
@@ -99,7 +126,7 @@ class Gateway:
                 except (ValidationError, KeyError, IndexError) as e:
                     last = f"{model_id(model)}: unusable answer ({e.__class__.__name__})"
                     break
-        raise RuntimeError(f"Model unavailable: {last}")
+        return last, wait
 
     def _count(self, data: dict[str, Any]) -> None:
         self.calls += 1

@@ -16,6 +16,7 @@ class ScreenState:
     screenshot_b64: str | None = None
     screenshot_tried: bool = False
     has_secure_field: bool = False
+    hint: str = ""  # what the brain should know about this kind of phone, shown with the element list
 
     def to_json(self) -> dict[str, Any]:
         d: dict[str, Any] = {"package": self.package, "width": self.width, "height": self.height,

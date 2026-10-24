@@ -8,9 +8,10 @@ import sys
 
 
 class Console:
-    def __init__(self, speak: bool = True, auto_yes: bool = False):
+    def __init__(self, speak: bool = True, auto_yes: bool = False, plan_only: bool = False):
         self.speak_enabled = speak and shutil.which("say") is not None
         self.auto_yes = auto_yes
+        self.plan_only = plan_only  # testing on a real phone: yes to the plan, no to everything else
         self._voice: subprocess.Popen | None = None
 
     def _speak(self, text: str) -> None:
@@ -34,7 +35,8 @@ class Console:
         print(f"    ⏱ see {t.capture_ms} ms · think {t.think_ms} ms{shot} · act {t.act_ms} ms "
               f"[{t.actions} action(s), {t.checked} checked on the box]", flush=True)
 
-    def ask(self, question: str, details: list[str] | None = None, yes: str = "Yes", no: str = "No") -> bool:
+    def ask(self, question: str, details: list[str] | None = None, yes: str = "Yes", no: str = "No",
+            plan: bool = False) -> bool:
         print(f"\n❓ {question}")
         for d in details or []:
             print(f"     ✓ {d}")
@@ -42,6 +44,9 @@ class Console:
         if self.auto_yes:
             print(f"   [{yes}] (auto)")
             return True
+        if self.plan_only:
+            print(f"   [{yes if plan else no}] (auto)")
+            return plan
         if not sys.stdin.isatty():
             return False
         answer = input(f"   Enter = {yes} · n = {no} > ").strip().lower()

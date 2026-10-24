@@ -15,7 +15,7 @@ from typing import Any
 
 from .brain.brain import Brain, screen_text
 from .brain.playbooks import before_approval, run_playbook
-from .brain.safety import PAYMENT_APPS, gate, node_text
+from .brain.safety import gate, node_text, payment_screen
 from .brain.schemas import Action, Plan
 from .config import Config
 from .console import Console
@@ -159,7 +159,7 @@ class Runner:
             report.playbook = plan.playbook
             self._trace("playbook", name=plan.playbook, outcome=outcome)
             return self._operate(plan, report) if outcome == "continue" else outcome
-        if not self.ui.ask(plan.summary, details=plan.steps):
+        if not self.ui.ask(plan.summary, details=plan.steps, plan=True):
             self.ui.say(phrase(self.lang, "declined"))
             return "declined"
 
@@ -190,7 +190,7 @@ class Runner:
                 return "stopped_by_user"
             if screen is None or (want_image and not screen.screenshot_b64):
                 screen, t.capture_ms = timed(self.phone.capture, want_image)
-            if screen.package in PAYMENT_APPS:
+            if payment_screen(screen):
                 # Never show a payment app to the AI: the user finishes it.
                 if not self.ui.ask(phrase(self.lang, "payment"), yes="Done", no="Stop"):
                     self.ui.say(phrase(self.lang, "stopped"))

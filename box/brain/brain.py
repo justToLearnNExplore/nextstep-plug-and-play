@@ -80,7 +80,7 @@ def _repeats_a_button(n: dict, buttons: list[dict]) -> bool:
 
 def screen_text(screen: ScreenState, limit: int = 90) -> str:
     """Numbered, compact element list. Indices are positions in screen.nodes (the box maps them back)."""
-    lines = [f"app={screen.package}"]
+    lines = [f"app={screen.package}"] + ([screen.hint] if screen.hint else [])
     buttons = [n for n in screen.nodes if n.get("click")]
     for idx, n in enumerate(screen.nodes[:limit]):
         if _repeats_a_button(n, buttons):

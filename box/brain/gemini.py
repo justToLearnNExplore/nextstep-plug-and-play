@@ -3,6 +3,8 @@
 A quick overload (429/5xx) is retried once, then the next model in the list is tried. A model the key
 may not use (403/404, e.g. "no longer available to new users") is never tried again; one that is busy
 or slow (a 503 after seconds, a 504, a timeout) rests for a few minutes and is tried after the others.
+If the last model tried is over its requests-per-minute limit (the free tier allows about 5), the box
+waits as long as Google says (at most 30 s) and tries the list once more.
 """
 
 import base64
@@ -20,7 +22,20 @@ T = TypeVar("T", bound=BaseModel)
 RETRY = {429, 500, 502, 503, 504}
 GONE = {403, 404}
 REST_S = 300.0
+MAX_WAIT_S = 30.0
 QUICK_S = 3.0  # only a failure this fast is worth one more try on the same model
+
+
+def rate_limit_wait(e: errors.APIError) -> float:
+    """The wait a 429 asks for (its RetryInfo, e.g. "12s"), else 12 s, at most MAX_WAIT_S."""
+    details = (e.details or {}).get("error", {}).get("details", []) if isinstance(e.details, dict) else []
+    for d in details:
+        if "RetryInfo" in str(d.get("@type", "")):
+            try:
+                return min(MAX_WAIT_S, max(1.0, float(str(d.get("retryDelay", "12")).rstrip("s"))))
+            except ValueError:
+                break
+    return 12.0
 
 
 class Gemini:
@@ -47,13 +62,29 @@ class Gemini:
         parts = [types.Part.from_bytes(data=base64.b64decode(p.jpeg_b64), mime_type="image/jpeg")
                  if isinstance(p, Image) else p for p in parts]
         last: object = None
+        for round_ in range(2):
+            answer = self._try_models(models, parts, cfg)
+            if not isinstance(answer, tuple):
+                return answer  # type: ignore[return-value]
+            last, wait = answer
+            if not wait or round_:
+                break
+            time.sleep(wait)  # the models are over their per-minute limit: wait once, then try again
+        raise RuntimeError(f"Gemini unavailable: {last}")
+
+    def _try_models(self, models: list[str], parts: list, cfg: types.GenerateContentConfig) -> object:
+        """The first usable answer, or (last error, seconds to wait if the last refusal was a rate limit)."""
+        last: object = None
+        wait = 0.0
         for model in self._order(models):
+            wait = 0.0
             for attempt in range(2):
                 t0 = time.monotonic()
                 try:
                     res = self.client.models.generate_content(model=model, contents=parts, config=cfg)
                 except errors.APIError as e:
                     last = e
+                    wait = rate_limit_wait(e) if e.code == 429 else 0.0
                     if e.code in GONE:
                         self.gone.add(model)
                     elif e.code in RETRY and attempt == 0 and time.monotonic() - t0 < QUICK_S:
@@ -64,6 +95,7 @@ class Gemini:
                     break
                 except httpx.TransportError as e:  # timed out, or the network dropped
                     last = e
+                    wait = 0.0
                     if attempt == 0 and not isinstance(e, httpx.TimeoutException):
                         time.sleep(0.5)
                         continue
@@ -71,10 +103,10 @@ class Gemini:
                     break
                 self._count(res)
                 if res.parsed is None:
-                    last = f"{model} returned no parsable JSON"
+                    last, wait = f"{model} returned no parsable JSON", 0.0
                     break
-                return res.parsed  # type: ignore[return-value]
-        raise RuntimeError(f"Gemini unavailable: {last}")
+                return res.parsed
+        return last, wait
 
     def _count(self, res) -> None:
         self.calls += 1

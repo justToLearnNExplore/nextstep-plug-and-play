@@ -2,6 +2,7 @@
 
     python -m box "set an alarm for 7 am" --phone android
     python -m box --phone android --yes "search for weather in Chrome"   # auto-approve (testing)
+    python -m box --phone iphone-mirroring --yes-plan "open the Clock app"  # a real iPhone via iPhone Mirroring
 """
 
 import argparse
@@ -18,6 +19,9 @@ def make_phone(kind: str, serial: str | None, helper: bool = True):
     if kind == "android":
         from .drivers.android_adb import AndroidAdbDriver
         return AndroidAdbDriver(serial, use_helper=helper)
+    if kind == "iphone-mirroring":
+        from .drivers.iphone_mirroring import IphoneMirroringDriver
+        return IphoneMirroringDriver()
     if kind == "ios-sim":
         from .drivers.ios_sim import IosSimDriver
         return IosSimDriver(serial)
@@ -27,9 +31,11 @@ def make_phone(kind: str, serial: str | None, helper: bool = True):
 def main() -> None:
     p = argparse.ArgumentParser(prog="nextstep-box")
     p.add_argument("goal", nargs="?", help="what the senior would say; asked for if missing")
-    p.add_argument("--phone", default="android", choices=["android", "ios-sim"])
+    p.add_argument("--phone", default="android", choices=["android", "iphone-mirroring", "ios-sim"])
     p.add_argument("--serial", help="adb serial or simulator UDID")
     p.add_argument("--yes", action="store_true", help="approve every question automatically (testing only)")
+    p.add_argument("--yes-plan", action="store_true",
+                   help="approve the plan, say no to every other question (testing on a real phone)")
     p.add_argument("--quiet", action="store_true", help="don't speak")
     p.add_argument("--no-helper", action="store_true", help="Android: plain ADB only, don't use the helper app")
     a = p.parse_args()
@@ -43,7 +49,7 @@ def main() -> None:
     goal = a.goal or input("🎤 What should I do? > ").strip()
     phone = make_phone(a.phone, a.serial, helper=not a.no_helper)
     try:
-        report = Runner(cfg, brain, phone, Console(speak=cfg.speak and not a.quiet, auto_yes=a.yes)).run(goal)
+        report = Runner(cfg, brain, phone, Console(speak=cfg.speak and not a.quiet, auto_yes=a.yes, plan_only=a.yes_plan)).run(goal)
         print(f"\n📊 {report.summary()}")
         print(f"   {type(llm).__name__}: {llm.calls} calls, {llm.input_tokens} in / {llm.output_tokens} out tokens")
     finally:

@@ -65,6 +65,14 @@ def test_overload_retries_then_falls_back_to_the_next_model():
     assert tried == ["google/gemini-3.8-flash", "google/gemini-3.8-flash", "google/gemini-3.5-flash"]
 
 
+def test_a_rate_limit_is_waited_out_once(monkeypatch):
+    from box.brain import gateway as gateway_mod
+    waits, replies = [], [httpx.Response(429, headers={"retry-after": "9"}, text="limit")] * 2 + [reply(TURN)]
+    monkeypatch.setattr(gateway_mod.time, "sleep", waits.append)
+    gateway(lambda request: replies.pop(0)).structured(["gemini-2.5-flash"], "s", ["x"], Turn)
+    assert waits == [0.8, 9.0] and replies == []
+
+
 def test_no_credit_is_reported_not_retried():
     calls = []
 
