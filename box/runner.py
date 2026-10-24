@@ -7,11 +7,13 @@ unexpected happened. Every step is timed so speed work can be measured.
 """
 
 import hashlib
+import json
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
-from .brain.brain import Brain
+from .brain.brain import Brain, screen_text
 from .brain.playbooks import run_playbook
 from .brain.safety import PAYMENT_APPS, gate, node_text
 from .brain.schemas import Action, Plan
@@ -93,13 +95,36 @@ def visible(text: str, screen: ScreenState) -> bool:
 
 
 def screen_sig(screen: ScreenState) -> str:
-    return hashlib.md5("|".join(node_text(n) for n in screen.nodes).encode()).hexdigest()[:12]
+    """Identifies what the screen shows (texts and focus), to notice when an action changed nothing."""
+    return hashlib.md5("|".join(f"{node_text(n)}{'*' if n.get('focus') else ''}" for n in screen.nodes)
+                       .encode()).hexdigest()[:12]
+
+
+def label_of(node: dict[str, Any]) -> str:
+    return str(node.get("text") or node.get("desc") or node.get("id") or "")
+
+
+def what_changed(before: ScreenState, after: ScreenState) -> str:
+    old = {label_of(n) for n in before.nodes}
+    new = list(dict.fromkeys(label_of(n) for n in after.nodes if label_of(n) and label_of(n) not in old))
+    return f"New on screen: {', '.join(repr(x[:40]) for x in new[:6])}." if new else "Nothing new appeared."
 
 
 class Runner:
-    def __init__(self, cfg: Config, brain: Brain, phone: PhoneDriver, console: Console):
+    def __init__(self, cfg: Config, brain: Brain, phone: PhoneDriver, console: Console, trace: bool = True):
         self.cfg, self.brain, self.phone, self.ui = cfg, brain, phone, console
         self.lang = cfg.language
+        self.trace_path: Path | None = None
+        if trace:
+            runs = Path(cfg.state_dir) / "runs"
+            runs.mkdir(parents=True, exist_ok=True)
+            self.trace_path = runs / f"{time.strftime('%Y%m%d-%H%M%S')}.jsonl"
+
+    def _trace(self, event: str, **data: Any) -> None:
+        """One JSON line per event in ~/.nextstep-box/runs/: stays on the box, for debugging."""
+        if self.trace_path:
+            with self.trace_path.open("a") as f:
+                f.write(json.dumps({"t": round(time.time(), 3), "event": event, **data}, ensure_ascii=False) + "\n")
 
     def run(self, goal: str) -> RunReport:
         report = RunReport(goal=goal)
@@ -118,6 +143,7 @@ class Runner:
             self.ui.status(f"({str(e)[:200]})")
             self.ui.say(phrase(self.lang, "no_brain"))
             return "plan_failed"
+        self._trace("plan", goal=goal, ms=report.plan_ms, plan=plan.model_dump())
         if plan.refused:
             self.ui.say(plan.summary)
             return "refused"
@@ -138,7 +164,8 @@ class Runner:
 
     def _operate(self, plan: Plan, report: RunReport) -> str:
         history: list[str] = []
-        tried: dict[str, int] = {}
+        no_effect: dict[str, int] = {}
+        visits: dict[str, int] = {}
         note, think_hard, screen = "", False, None
         want_image = True  # the first look includes a screenshot; later ones only when needed
         for _ in range(self.cfg.max_turns):
@@ -157,6 +184,11 @@ class Runner:
                 screen, ms = timed(self.phone.capture, True)
                 t.capture_ms += ms
             with_image = bool(screen.screenshot_b64) and not screen.has_secure_field
+            sig = screen_sig(screen)
+            visits[sig] = visits.get(sig, 0) + 1
+            if visits[sig] > 6:  # going round in circles
+                self.ui.say(phrase(self.lang, "stuck"))
+                return "stuck"
             try:
                 turn, t.think_ms = timed(self.brain.next_turn, plan, history, screen, note, with_image, think_hard)
                 if turn.need_screenshot and not with_image and not screen.has_secure_field:
@@ -170,6 +202,7 @@ class Runner:
                 self.ui.say(phrase(self.lang, "no_brain"))
                 return "brain_failed"
             t.screenshot = with_image
+            self._trace("turn", ms=t.think_ms, note=note, image=with_image, screen=screen_text(screen), turn=turn.model_dump())
             if turn.done:
                 report.steps.append(t)
                 self.ui.timing(t)
@@ -179,7 +212,7 @@ class Runner:
                 self.ui.say(turn.message or phrase(self.lang, "not_finished"))
                 return "not_possible"
 
-            screen, note, ending, think_hard = self._run_batch(turn.actions, screen, history, tried, t)
+            screen, note, ending, think_hard = self._run_batch(turn.actions, screen, history, no_effect, t)
             want_image = bool(note)  # something unexpected: let the brain see the screen next time
             report.steps.append(t)
             self.ui.timing(t)
@@ -189,7 +222,7 @@ class Runner:
         return "too_long"
 
     def _run_batch(self, actions: list[Action], screen: ScreenState, history: list[str],
-                   tried: dict[str, int], t: StepTiming) -> tuple[ScreenState | None, str, str, bool]:
+                   no_effect: dict[str, int], t: StepTiming) -> tuple[ScreenState | None, str, str, bool]:
         """Runs the brain's actions in order, checking each one on the box.
         Returns (latest screen or None, note for the brain, outcome if the task must end, think hard)."""
         first_screen = screen
@@ -199,15 +232,6 @@ class Runner:
             node, xy = self._resolve(a, screen, first_screen, first=(i == 0))
             if a.kind in NEEDS_TARGET and xy is None:
                 return screen, f"Could not find '{a.label}' on the screen. Look again.", "", False
-
-            sig = f"{screen_sig(screen)}:{a.kind}:{a.label}:{a.text}"
-            tried[sig] = tried.get(sig, 0) + 1
-            if tried[sig] >= 3:
-                self.ui.say(phrase(self.lang, "stuck"))
-                return None, "", "stuck", False
-            if tried[sig] == 2:
-                return screen, (f"You already did '{a.intent or a.kind}' on this exact screen and nothing changed. "
-                                "Do something different."), "", True
 
             g, prompt = gate(a, node, screen, self.lang)
             if g == "blocked":
@@ -226,18 +250,29 @@ class Runner:
                 self.ui.status(a.intent, speak=a.announce and g == "auto")
 
             result, ms = timed(self._act, a, node, xy, screen)
+            self._trace("act", kind=a.kind, label=a.label, text=a.text, xy=xy, gate=g, result=result, ms=ms)
             t.act_ms += ms
             t.actions += 1
             history.append(f"{a.intent or a.kind}" + ("" if result.get("ok") else f" -> FAILED ({result.get('error')})"))
             if not result.get("ok"):
                 return None, f"'{a.intent or a.kind}' failed: {result.get('error')}. Try another way.", "", False
 
+            before = screen
             screen, ms = timed(self.phone.capture, False)
             t.capture_ms += ms
+            rest = " The rest of your actions were skipped." if i < len(actions) - 1 else ""
+            if a.kind in ("tap", "long_press", "type") and screen_sig(screen) == screen_sig(before):
+                key = f"{screen_sig(before)}:{a.kind}:{a.label}:{a.text}"
+                no_effect[key] = no_effect.get(key, 0) + 1
+                if no_effect[key] >= 3:
+                    self.ui.say(phrase(self.lang, "stuck"))
+                    return None, "", "stuck", False
+                return screen, (f"'{a.intent or a.kind}' changed nothing on the screen.{rest} Try something else "
+                                "(another element, scroll, or back)."), "", no_effect[key] >= 2
             if a.expect:
                 if not visible(a.expect, screen):
-                    rest = " The rest of your actions were skipped." if i < len(actions) - 1 else ""
-                    return screen, f"After '{a.intent or a.kind}', '{a.expect}' is not on the screen.{rest}", "", False
+                    return screen, (f"After '{a.intent or a.kind}', '{a.expect}' is not on the screen. "
+                                    f"{what_changed(before, screen)}{rest}"), "", False
                 t.checked += 1
             if g == "confirm":
                 break  # always look again after an irreversible step

@@ -244,6 +244,14 @@ class AndroidAdbDriver:
             return {"ok": False, "error": out.strip().splitlines()[-1][:120]}
         return {"ok": True}
 
+    def set_timer(self, seconds: int, label: str = "") -> dict[str, Any]:
+        """The Clock app's own "set timer" intent, started at once (SKIP_UI); needs the helper's permission."""
+        if self._try("set_timer", seconds=int(seconds), label=label):
+            return {"ok": True}
+        self.shell.run("am start -a android.intent.action.SHOW_TIMERS >/dev/null 2>&1")
+        self.settle()
+        return {"ok": False, "error": "no_helper", "opened": "timers"}
+
     def _installed(self, pkg: str) -> bool:
         return "package:" in self.shell.run(f"pm path {pkg} 2>/dev/null")
 

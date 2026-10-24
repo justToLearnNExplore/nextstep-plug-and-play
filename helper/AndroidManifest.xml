@@ -4,12 +4,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.nextstepbox.helper">
 
-    <!-- Lets the box set alarms in one step (the adb shell itself may not hold this). -->
+    <!-- Lets the box set alarms and timers in one step (the adb shell itself may not hold this). -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
     <queries>
         <intent>
             <action android:name="android.intent.action.SET_ALARM" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SET_TIMER" />
         </intent>
     </queries>
 

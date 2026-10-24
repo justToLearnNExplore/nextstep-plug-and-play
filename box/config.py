@@ -16,5 +16,6 @@ class Config:
     # Comma-separated fallback lists; empty = the brain's defaults.
     planner_models: list[str] = field(default_factory=lambda: _models("NEXTSTEP_BOX_PLANNER_MODELS"))
     operator_models: list[str] = field(default_factory=lambda: _models("NEXTSTEP_BOX_OPERATOR_MODELS"))
+    operator_thinking: str = os.getenv("NEXTSTEP_BOX_OPERATOR_THINKING", "LOW")  # MINIMAL / LOW / MEDIUM
     max_turns: int = 40
     speak: bool = os.getenv("NEXTSTEP_SPEAK", "1") == "1"

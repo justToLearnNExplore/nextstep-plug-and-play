@@ -89,3 +89,20 @@ def test_key_choice(tmp_path, monkeypatch):
     assert type(make_llm()).__name__ == "Gemini"  # direct is one hop shorter
     monkeypatch.setenv("NEXTSTEP_BOX_LLM", "gateway")
     assert type(make_llm()).__name__ == "Gateway"
+
+
+def test_models_the_account_cannot_use_are_skipped_after_the_first_refusal():
+    tried = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        model = json.loads(request.content)["model"]
+        tried.append(model)
+        if model != "google/gemini-2.5-flash":
+            return httpx.Response(403, json={"error": {"message": "Free tier users do not have access to this model."}})
+        return reply(TURN)
+
+    g = gateway(handler)
+    models = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash"]
+    g.structured(models, "s", ["x"], Turn)
+    g.structured(models, "s", ["x"], Turn)
+    assert tried == ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-2.5-flash", "google/gemini-2.5-flash"]

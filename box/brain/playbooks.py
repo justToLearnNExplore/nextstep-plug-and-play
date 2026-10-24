@@ -2,6 +2,7 @@
 
 set_alarm  Android: the Clock app's own SET_ALARM intent with SKIP_UI, sent by the helper app (which
            holds the permission); without it the box opens the alarm list and the operator finishes
+set_timer  same, with SET_TIMER (length in seconds); without the helper it opens the timer screen
 web_search / open_link / open_app  jump straight to the right screen; the operator takes it from there
 """
 
@@ -28,6 +29,17 @@ def run_playbook(plan: Plan, phone: PhoneDriver) -> tuple[str, dict[str, Any]]:
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
             return "skipped", {"ok": False, "error": "bad_time"}
         res = phone.set_alarm(hour, minute, p.get("label", ""))  # type: ignore[attr-defined]
+        if res.get("ok"):
+            return "done", res
+        return ("continue" if res.get("opened") else "skipped"), res
+    if plan.playbook == "set_timer" and hasattr(phone, "set_timer"):
+        try:
+            seconds = int(float(p.get("seconds", "")))
+        except ValueError:
+            return "skipped", {"ok": False, "error": "bad_length"}
+        if not 1 <= seconds <= 24 * 3600:
+            return "skipped", {"ok": False, "error": "bad_length"}
+        res = phone.set_timer(seconds, p.get("label", ""))  # type: ignore[attr-defined]
         if res.get("ok"):
             return "done", res
         return ("continue" if res.get("opened") else "skipped"), res

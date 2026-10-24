@@ -46,7 +46,7 @@ import java.nio.charset.StandardCharsets;
  * also type any language (Hindi, Kannada...) and set alarms in one step.
  */
 public class Box extends Instrumentation {
-    static final int VERSION = 1;
+    static final int VERSION = 2;
     static final String SOCKET = "nextstep-box-helper";
     static final int SHELL_UID = 2000;
     static final int MAX_TEXT = 200;
@@ -136,6 +136,8 @@ public class Box extends Instrumentation {
                 return enter();
             case "set_alarm":
                 return setAlarm(req.getInt("hour"), req.getInt("minute"), req.optString("label", ""));
+            case "set_timer":
+                return setTimer(req.getInt("seconds"), req.optString("label", ""));
             case "quit":
                 running = false;
                 return ok();
@@ -319,6 +321,17 @@ public class Box extends Instrumentation {
         Intent i = new Intent(AlarmClock.ACTION_SET_ALARM)
                 .putExtra(AlarmClock.EXTRA_HOUR, hour)
                 .putExtra(AlarmClock.EXTRA_MINUTES, minute)
+                .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (!label.isEmpty()) i.putExtra(AlarmClock.EXTRA_MESSAGE, label);
+        if (i.resolveActivity(getContext().getPackageManager()) == null) return fail("no_clock_app");
+        getContext().startActivity(i);
+        return ok();
+    }
+
+    private JSONObject setTimer(int seconds, String label) throws JSONException {
+        Intent i = new Intent(AlarmClock.ACTION_SET_TIMER)
+                .putExtra(AlarmClock.EXTRA_LENGTH, seconds)
                 .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         if (!label.isEmpty()) i.putExtra(AlarmClock.EXTRA_MESSAGE, label);

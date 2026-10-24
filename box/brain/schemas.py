@@ -16,9 +16,10 @@ class Plan(BaseModel):
     steps: list[str] = Field(description="2-4 very short concrete actions, user's language, shown on screen.")
     refused: bool = Field(description="True for anything harmful, moving money to people, or sharing OTPs/PINs/passwords.")
     app: str = Field(description="Main app to use, e.g. 'YouTube', 'Clock', 'Chrome'. Empty if none.")
-    playbook: Literal["none", "set_alarm", "open_link", "web_search", "open_app"] = Field(
+    playbook: Literal["none", "set_alarm", "set_timer", "open_link", "web_search", "open_app"] = Field(
         description="A shortcut that does the task (or its first part) without step-by-step AI: "
-        "set_alarm (params hour 0-23, minute, label), open_link (param url), web_search (param query), open_app (param app).")
+        "set_alarm (params hour 0-23, minute, label), set_timer (params seconds, label), open_link (param url), "
+        "web_search (param query), open_app (param app).")
     params: list[Param] = Field(description="Playbook parameters, e.g. [{name: 'hour', value: '7'}].")
     goal: str = Field(description="Precise English instruction for the phone operator, all the way to the result.")
     done_message: str = Field(description="What to say when it worked, user's language, e.g. 'Your alarm is set for 7 AM.'")

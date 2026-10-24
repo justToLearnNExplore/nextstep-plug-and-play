@@ -39,7 +39,7 @@ def main() -> None:
         llm = make_llm()
     except NoKey as e:
         sys.exit(str(e))
-    brain = Brain(llm, cfg.language, cfg.planner_models or None, cfg.operator_models or None)
+    brain = Brain(llm, cfg.language, cfg.planner_models or None, cfg.operator_models or None, cfg.operator_thinking)
     goal = a.goal or input("🎤 What should I do? > ").strip()
     phone = make_phone(a.phone, a.serial, helper=not a.no_helper)
     try:

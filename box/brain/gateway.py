@@ -60,6 +60,7 @@ class Gateway:
         self.input_tokens = 0
         self.output_tokens = 0
         self._schemas: dict[type, dict[str, Any]] = {}
+        self.unavailable: set[str] = set()  # models this account may not use (e.g. not in the free tier)
 
     def structured(self, models: list[str], system: str, parts: list, schema: type[T], thinking: str = "LOW") -> T:
         if schema not in self._schemas:
@@ -73,7 +74,7 @@ class Gateway:
             "reasoning": {"effort": thinking.lower(), "exclude": True},
         }
         last: object = None
-        for model in models:
+        for model in [m for m in models if model_id(m) not in self.unavailable]:
             for attempt in range(2):
                 try:
                     r = self.http.post("/chat/completions", json={"model": model_id(model), **body})
@@ -85,6 +86,8 @@ class Gateway:
                     break
                 if r.status_code != 200:
                     last = f"{model_id(model)}: HTTP {r.status_code} {r.text[:200]}"
+                    if r.status_code == 403 and "do not have access to this model" in r.text:
+                        self.unavailable.add(model_id(model))  # skip it from now on
                     if r.status_code in RETRY and attempt == 0:
                         time.sleep(0.8)
                         continue

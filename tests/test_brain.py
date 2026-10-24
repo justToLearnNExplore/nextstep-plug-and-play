@@ -69,6 +69,10 @@ class FakePhone:
         self.alarms.append((hour, minute, label))
         return {"ok": True}
 
+    def set_timer(self, seconds, label=""):
+        self.alarms.append(("timer", seconds, label))
+        return {"ok": True}
+
     def close(self):
         pass
 
@@ -94,7 +98,7 @@ class FakeConsole:
 
 
 def runner(gemini, phone, console=None):
-    return Runner(Config(), Brain(gemini), phone, console or FakeConsole())
+    return Runner(Config(), Brain(gemini), phone, console or FakeConsole(), trace=False)
 
 
 HOME = screen(node("Search", (0, 0, 1000, 200), click=True, edit=True), node("Cart", (800, 1800, 1000, 2000), click=True))
@@ -120,6 +124,9 @@ def test_gates():
     s = screen(node("Place order ₹62", click=True))
     assert gate(act("tap", 0, "Place order ₹62"), s.nodes[0], s, "en-IN")[0] == "confirm"
     assert gate(act("tap", 0, "Next", irreversible=True), s.nodes[0], s, "en-IN")[0] == "confirm"
+    perm = screen(node("Allow", click=True), node("Accept & continue", click=True))
+    assert gate(act("tap", 0, "Allow"), perm.nodes[0], perm, "en-IN")[0] == "confirm"
+    assert gate(act("tap", 1, "Accept & continue"), perm.nodes[1], perm, "en-IN")[0] == "confirm"
     pw = screen(node(edit=True, focus=True, secure=True))
     assert gate(act("type", 0, text="1234"), pw.nodes[0], pw, "en-IN")[0] == "private"
     otp = screen(node("Enter OTP", edit=True, focus=True))
@@ -174,19 +181,48 @@ def test_irreversible_tap_asks_and_no_means_stop():
     assert con.asked[-1].startswith("Order milk for ₹62.")
 
 
-def test_repeating_on_an_unchanged_screen_is_caught():
+def test_an_action_that_changes_nothing_is_reported_then_stopped():
     class StuckPhone(FakePhone):
         def execute(self, name, args, screen):
             self.done.append((name, args))
             return {"ok": True}  # the screen never changes
 
     same = turn(act("tap", 1, "Cart"))
-    g = FakeGemini(plan(), same, same, same, same)
+    g = FakeGemini(plan(), same, same, same)
     phone = StuckPhone(HOME)
     report = runner(g, phone).run("x")
     assert report.outcome == "stuck"
-    assert len(phone.done) == 1
-    assert "nothing changed" in g.calls[3][1][0]
+    assert len(phone.done) == 3
+    assert "changed nothing" in g.calls[2][1][0]
+
+
+def test_repeating_an_action_that_did_work_is_allowed():
+    # tap '5' -> display changes; delete -> back to the start; tap '5' again must not count as a loop
+    pad = lambda shown: screen(node(shown), node("Delete", (800, 0, 1000, 100), click=True),
+                               node("5", (400, 900, 600, 1100), click=True))
+    g = FakeGemini(plan(), turn(act("tap", 2, "5")), turn(act("tap", 1, "Delete")), turn(act("tap", 2, "5")),
+                   turn(done=True, success=True, message="ok"))
+    phone = FakePhone(pad("00:00"), pad("00:05"), pad("00:00"), pad("00:05"))
+    assert runner(g, phone).run("x").outcome == "done"
+
+
+def test_unexpected_result_note_says_what_appeared():
+    g = FakeGemini(plan(), turn(act("tap", 1, "Cart", expect="Checkout")), turn(done=True, success=False))
+    runner(g, FakePhone(HOME, RESULTS)).run("x")
+    assert "New on screen: 'Amul Milk 1 L', 'ADD'" in g.calls[2][1][0]
+
+
+def test_keypad_backspace_is_not_treated_as_deleting_data():
+    keys = [node(str(d), click=True) for d in range(10)]
+    pad = screen(node("Delete", click=True), *keys)
+    assert gate(act("tap", 0, "Delete"), pad.nodes[0], pad, "en-IN")[0] == "auto"
+    chat = screen(node("Delete", click=True))
+    assert gate(act("tap", 0, "Delete"), chat.nodes[0], chat, "en-IN")[0] == "confirm"
+
+
+def test_screen_text_skips_labels_that_repeat_their_button():
+    tabs = screen(node("Timer", (500, 0, 700, 100), click=True), node("Timer", (520, 20, 680, 80)))
+    assert screen_text(tabs).count("'Timer'") == 1
 
 
 def test_alarm_playbook_skips_the_operator():
@@ -197,6 +233,13 @@ def test_alarm_playbook_skips_the_operator():
     assert phone.alarms == [(7, 0, "Walk")]
     assert len(g.calls) == 1 and report.outcome == "done" and report.playbook == "set_alarm"
     assert con.said[-1] == "All set."
+
+
+def test_timer_playbook_skips_the_operator():
+    g = FakeGemini(plan("set_timer", [("seconds", "300")]))
+    phone = FakePhone(HOME)
+    report = runner(g, phone).run("5 minute timer")
+    assert phone.alarms == [("timer", 300, "")] and len(g.calls) == 1 and report.outcome == "done"
 
 
 def test_payment_app_is_never_sent_to_the_brain():

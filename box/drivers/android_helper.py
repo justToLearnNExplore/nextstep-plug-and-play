@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 PACKAGE = "com.nextstepbox.helper"
-VERSION = 1  # must match Box.VERSION in helper/src/com/nextstepbox/helper/Box.java
+VERSION = 2  # must match Box.VERSION in helper/src/com/nextstepbox/helper/Box.java
 SOCKET = "nextstep-box-helper"
 APK = Path(os.getenv("NEXTSTEP_BOX_HELPER_APK", "")
            or Path(__file__).resolve().parents[2] / "helper" / "build" / "nextstep-box-helper.apk")
