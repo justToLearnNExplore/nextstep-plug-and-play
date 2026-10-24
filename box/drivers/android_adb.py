@@ -6,7 +6,6 @@ milliseconds instead of starting a new adb process each time.
 """
 
 import base64
-import hashlib
 import io
 import queue
 import re
@@ -119,15 +118,15 @@ class AndroidAdbDriver:
         return base64.b64encode(buf.getvalue()).decode()
 
     def _frame_hash(self) -> str:
-        # Raw screencap (no PNG encoding) is the cheapest way to notice the screen changing.
-        return hashlib.md5(self._exec_out("screencap")).hexdigest()
+        # Hashed on the phone: ~50 ms, versus ~350 ms to pull the raw 8 MB frame over USB.
+        return self.shell.run("screencap | md5sum").split(" ", 1)[0].strip()
 
     def settle(self, max_s: float = 2.5) -> None:
         """Returns as soon as the screen stops changing (two equal frames), at most max_s."""
-        time.sleep(0.25)
+        time.sleep(0.15)
         deadline, last = time.time() + max_s, self._frame_hash()
         while time.time() < deadline:
-            time.sleep(0.2)
+            time.sleep(0.12)
             now = self._frame_hash()
             if now == last:
                 return
@@ -183,6 +182,25 @@ class AndroidAdbDriver:
         else:
             return {"ok": False, "error": f"unsupported_action:{name}"}
         self.settle()
+        return {"ok": True}
+
+    # ---- playbooks ----------------------------------------------------------------------------
+
+    def set_alarm(self, hour: int, minute: int, label: str = "") -> dict[str, Any]:
+        """The Clock app's own "set alarm" intent; SKIP_UI sets it without opening any screen."""
+        cmd = (f"am start -a android.intent.action.SET_ALARM --ei android.intent.extra.alarm.HOUR {int(hour)} "
+               f"--ei android.intent.extra.alarm.MINUTES {int(minute)} --ez android.intent.extra.alarm.SKIP_UI true")
+        if label:
+            cmd += f" --es android.intent.extra.alarm.MESSAGE {shlex.quote(label)}"
+        out = self.shell.run(cmd + " 2>&1")
+        if "Permission Denial" in out:
+            # The adb shell may not hold SET_ALARM (stock Android doesn't grant it). Opening the alarm
+            # list still needs no permission and saves the operator a few steps.
+            self.shell.run("am start -a android.intent.action.SHOW_ALARMS >/dev/null 2>&1")
+            self.settle()
+            return {"ok": False, "error": "no_set_alarm_permission", "opened": "alarms"}
+        if "Error" in out or "Exception" in out:
+            return {"ok": False, "error": out.strip().splitlines()[-1][:120]}
         return {"ok": True}
 
     def _installed(self, pkg: str) -> bool:

@@ -7,7 +7,7 @@ from typing import Any, Protocol
 
 @dataclass
 class ScreenState:
-    """Same shape as the NextStep backend's Screen model (and the Android app's ScreenReader)."""
+    """One look at the phone: the element list (pixel bounds) and, sometimes, a JPEG screenshot."""
 
     package: str
     width: int
@@ -33,14 +33,14 @@ class PhoneDriver(Protocol):
         """The current screen: element list always, a JPEG screenshot only when asked."""
         ...
 
-    def execute(self, name: str, args: dict[str, Any], screen: ScreenState) -> dict[str, Any]:
-        """Runs one backend action (click, type, open_link, ...). Coordinates are 0-999."""
+    def execute(self, name: str, args: dict[str, Any], screen: ScreenState | None) -> dict[str, Any]:
+        """Runs one action (click, type, open_link, ...). Coordinates are 0-999."""
         ...
 
     def close(self) -> None: ...
 
 
 def px(value: Any, size: int) -> int:
-    """Backend coordinates are normalised to 0-999; map them to device pixels."""
+    """The brain works in 0-999 coordinates; map them to device pixels."""
     v = min(max(int(value), 0), 999)
     return int(v * size / 1000)

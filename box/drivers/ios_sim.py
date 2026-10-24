@@ -33,7 +33,7 @@ class IosSimDriver:
         info = json.loads(self._idb("describe", "--json"))
         dims = info.get("screen_dimensions", {})
         density = float(dims.get("density", 3.0)) or 3.0
-        # idb taps and accessibility frames are in points; the backend wants a pixel-like space.
+        # idb taps and accessibility frames are in points; the brain gets the same space as Android.
         self.width = int(dims.get("width", 1179) / density)
         self.height = int(dims.get("height", 2556) / density)
 

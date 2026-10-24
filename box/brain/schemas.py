@@ -1,0 +1,48 @@
+"""What the Box Brain asks Gemini for. Kept small: fewer output tokens = faster answers."""
+
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class Param(BaseModel):
+    # Pairs rather than a dict: Gemini's response schema has no free-form maps.
+    name: str
+    value: str
+
+
+class Plan(BaseModel):
+    summary: str = Field(description="ONE short question in the user's language naming the concrete result, e.g. 'Shall I set an alarm for 7 AM?'. Read aloud, under 20 words.")
+    steps: list[str] = Field(description="2-4 very short concrete actions, user's language, shown on screen.")
+    refused: bool = Field(description="True for anything harmful, moving money to people, or sharing OTPs/PINs/passwords.")
+    app: str = Field(description="Main app to use, e.g. 'YouTube', 'Clock', 'Chrome'. Empty if none.")
+    playbook: Literal["none", "set_alarm", "open_link", "web_search", "open_app"] = Field(
+        description="A shortcut that does the task (or its first part) without step-by-step AI: "
+        "set_alarm (params hour 0-23, minute, label), open_link (param url), web_search (param query), open_app (param app).")
+    params: list[Param] = Field(description="Playbook parameters, e.g. [{name: 'hour', value: '7'}].")
+    goal: str = Field(description="Precise English instruction for the phone operator, all the way to the result.")
+    done_message: str = Field(description="What to say when it worked, user's language, e.g. 'Your alarm is set for 7 AM.'")
+
+
+class Action(BaseModel):
+    kind: Literal["tap", "long_press", "type", "scroll", "back", "home", "open_app", "open_link", "wait", "hand_over"]
+    element: int = Field(description="Index [n] of the target element in the list, or -1 if none / using x,y.")
+    label: str = Field(description="Visible text of the target element (used to find it again if the screen moved), or ''.")
+    x: int = Field(description="0-999 horizontal position if no element fits, else -1.")
+    y: int = Field(description="0-999 vertical position if no element fits, else -1.")
+    text: str = Field(description="Text to type (kind=type), app name (open_app) or URL (open_link); else ''.")
+    press_enter: bool = Field(description="Press Enter after typing.")
+    direction: Literal["up", "down", "none"] = Field(description="Scroll direction for kind=scroll; else 'none'.")
+    intent: str = Field(description="What this does, a few words in the user's language, e.g. 'Tapping Add alarm'.")
+    announce: bool = Field(description="Say it aloud: only key moments (item added, alarm set, fare found).")
+    expect: str = Field(description="Text that should be visible right after this action (lets the box check without asking AI), or ''.")
+    irreversible: bool = Field(description="True for Place order, Pay, Send, Book/Request ride, Delete, Install, Confirm.")
+
+
+class Turn(BaseModel):
+    need_screenshot: bool = Field(description="True only if the element list is not enough to decide (icons without text, "
+                                  "images, maps); then return no actions and the box sends a screenshot.")
+    actions: list[Action] = Field(description="1-5 actions to run in order. Stop the list at any irreversible action.")
+    done: bool = Field(description="True only when the CURRENT screen shows the goal achieved, or it cannot be done.")
+    success: bool
+    message: str = Field(description="When done: 1 short sentence for the user in their language; else ''.")

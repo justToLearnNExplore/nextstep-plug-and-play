@@ -31,8 +31,8 @@ class Console:
 
     def timing(self, t) -> None:
         shot = " +screenshot" if t.screenshot else ""
-        print(f"    ⏱ see {t.capture_ms} ms · think {t.server_ms} ms ({t.source}{shot}) · act {t.act_ms} ms "
-              f"[{t.actions} action(s)]", flush=True)
+        print(f"    ⏱ see {t.capture_ms} ms · think {t.think_ms} ms{shot} · act {t.act_ms} ms "
+              f"[{t.actions} action(s), {t.checked} checked on the box]", flush=True)
 
     def ask(self, question: str, details: list[str] | None = None, yes: str = "Yes", no: str = "No") -> bool:
         print(f"\n❓ {question}")
