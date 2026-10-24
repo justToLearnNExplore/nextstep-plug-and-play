@@ -95,6 +95,9 @@ class FakeConsole:
     def finish_speaking(self):
         pass
 
+    def speak_now(self, text):
+        self.said.append(text)
+
     def ask(self, question, details=None, yes="Yes", no="No", plan=False):
         self.asked.append(question)
         return self.answers.pop(0) if self.answers else True

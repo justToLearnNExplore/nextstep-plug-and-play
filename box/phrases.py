@@ -38,6 +38,10 @@ PHRASES = {
         "scam_warning": "This message looks like a scam. Do not open the link and do not share any details or OTP.",
         "scam_safe": "I don't see signs of a scam here. Still, never share your OTP, PIN or password with anyone.",
         "official_site_q": "Shall I open the official {name} website?",
+        "camera_medicine": "I've opened the camera. Hold the medicine's name in front of the phone's back camera, about a hand away. I'll look in a moment.",
+        "camera_list": "I've opened the camera. Hold your list in front of the phone's back camera, about a hand away. I'll look in a moment.",
+        "order_list_q": "Shall I add these to your Blinkit cart? I won't place the order.",
+        "no_camera": "I can't use this phone's camera yet.",
     },
     "hi-IN": {
         "thinking": "एक पल, सोच रहा हूँ…",
@@ -76,6 +80,10 @@ PHRASES = {
         "scam_warning": "यह मैसेज धोखा लगता है। लिंक मत खोलिए और कोई जानकारी या ओटीपी मत बताइए।",
         "scam_safe": "मुझे यहाँ धोखे के संकेत नहीं दिखते। फिर भी अपना ओटीपी, पिन या पासवर्ड किसी को न बताएँ।",
         "official_site_q": "क्या मैं {name} की असली वेबसाइट खोलूँ?",
+        "camera_medicine": "मैंने कैमरा खोल दिया है। दवा का नाम फ़ोन के पीछे वाले कैमरे के सामने, लगभग एक हाथ की दूरी पर रखिए। मैं एक पल में देखूँगा।",
+        "camera_list": "मैंने कैमरा खोल दिया है। अपनी लिस्ट फ़ोन के पीछे वाले कैमरे के सामने, लगभग एक हाथ की दूरी पर रखिए। मैं एक पल में देखूँगा।",
+        "order_list_q": "क्या मैं ये सामान आपकी Blinkit कार्ट में डाल दूँ? ऑर्डर मैं नहीं करूँगा।",
+        "no_camera": "मैं अभी इस फ़ोन का कैमरा इस्तेमाल नहीं कर सकता।",
     },
     "kn-IN": {
         "thinking": "ಒಂದು ಕ್ಷಣ, ಯೋಚಿಸುತ್ತಿದ್ದೇನೆ…",
@@ -114,6 +122,10 @@ PHRASES = {
         "scam_warning": "ಈ ಸಂದೇಶ ಮೋಸದಂತೆ ಕಾಣುತ್ತದೆ. ಲಿಂಕ್ ತೆರೆಯಬೇಡಿ, ಯಾವುದೇ ವಿವರ ಅಥವಾ ಒಟಿಪಿ ಹಂಚಿಕೊಳ್ಳಬೇಡಿ.",
         "scam_safe": "ಇಲ್ಲಿ ಮೋಸದ ಲಕ್ಷಣಗಳು ಕಾಣುತ್ತಿಲ್ಲ. ಆದರೂ ನಿಮ್ಮ ಒಟಿಪಿ, ಪಿನ್ ಅಥವಾ ಪಾಸ್‌ವರ್ಡ್ ಯಾರಿಗೂ ಹೇಳಬೇಡಿ.",
         "official_site_q": "{name} ನ ಅಧಿಕೃತ ವೆಬ್‌ಸೈಟ್ ತೆರೆಯಲೇ?",
+        "camera_medicine": "ನಾನು ಕ್ಯಾಮೆರಾ ತೆರೆದಿದ್ದೇನೆ. ಔಷಧಿಯ ಹೆಸರನ್ನು ಫೋನ್‌ನ ಹಿಂದಿನ ಕ್ಯಾಮೆರಾದ ಮುಂದೆ, ಸುಮಾರು ಒಂದು ಕೈ ದೂರದಲ್ಲಿ ಹಿಡಿಯಿರಿ. ನಾನು ಒಂದು ಕ್ಷಣದಲ್ಲಿ ನೋಡುತ್ತೇನೆ.",
+        "camera_list": "ನಾನು ಕ್ಯಾಮೆರಾ ತೆರೆದಿದ್ದೇನೆ. ನಿಮ್ಮ ಪಟ್ಟಿಯನ್ನು ಫೋನ್‌ನ ಹಿಂದಿನ ಕ್ಯಾಮೆರಾದ ಮುಂದೆ, ಸುಮಾರು ಒಂದು ಕೈ ದೂರದಲ್ಲಿ ಹಿಡಿಯಿರಿ. ನಾನು ಒಂದು ಕ್ಷಣದಲ್ಲಿ ನೋಡುತ್ತೇನೆ.",
+        "order_list_q": "ಇವುಗಳನ್ನು ನಿಮ್ಮ Blinkit ಕಾರ್ಟ್‌ಗೆ ಸೇರಿಸಲೇ? ನಾನು ಆರ್ಡರ್ ಮಾಡುವುದಿಲ್ಲ.",
+        "no_camera": "ನಾನು ಈ ಫೋನ್‌ನ ಕ್ಯಾಮೆರಾವನ್ನು ಇನ್ನೂ ಬಳಸಲಾಗುವುದಿಲ್ಲ.",
     },
 }
 

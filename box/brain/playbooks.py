@@ -4,6 +4,8 @@ These ask their own, more exact question instead of the plan's (or none):
 explain_screen  says what the current screen is and whether it is safe; offers to go back if it isn't
 scam_check    "Is this message safe?": fixed rules plus the AI, the more cautious wins; offers only an
               official website (or the cyber-crime portal), never the message's link
+read_medicine / read_list  open the phone's camera, guide the person, read the label or the written list
+              from the live view (nothing is saved); the list can then be put in the Blinkit cart
 missed        "What did I miss?": missed calls, SMS and message notifications of the last hour, read on
               the phone; codes (OTPs) are blanked out on the box before anything goes to the AI
 call          looks the person up in the phone's contacts on the box (the list never goes to Gemini), asks
@@ -149,6 +151,11 @@ def before_approval(plan: Plan, phone: PhoneDriver, ui, cfg: Config, brain=None)
     p, lang = params(plan), cfg.language
     if plan.playbook == "explain_screen" and brain is not None:
         return _explain(phone, ui, lang, brain)
+    if plan.playbook in ("read_medicine", "read_list") and brain is not None:
+        if not hasattr(phone, "open_camera"):
+            ui.say(phrase(lang, "no_camera"))
+            return "not_possible"
+        return _camera(plan, p, phone, ui, cfg, brain)
     if plan.playbook == "scam_check" and brain is not None:
         return _scam_check(phone, ui, lang, brain)
     if plan.playbook == "missed" and brain is not None and hasattr(phone, "recent_activity"):
@@ -187,6 +194,47 @@ def _explain(phone: PhoneDriver, ui, lang: str, brain) -> str:
         if ui.ask(phrase(lang, "take_back" if exp.suggest == "back" else "go_home_q")):
             phone.execute("go_back" if exp.suggest == "back" else "go_home", {}, None)  # type: ignore[arg-type]
     return "done"
+
+
+def _camera(plan: Plan, p: dict[str, str], phone: PhoneDriver, ui, cfg: Config, brain) -> str | None:
+    """Camera help: the person holds the label (or list) up; the box looks, once more if it can't read it."""
+    lang, medicine = cfg.language, plan.playbook == "read_medicine"
+    if not phone.open_camera().get("ok"):  # type: ignore[attr-defined]
+        return None
+    ui.speak_now(phrase(lang, "camera_medicine" if medicine else "camera_list"))
+    info = None
+    for attempt in range(2):
+        time.sleep(2.0)  # time to hold it up
+        photo = phone.photo()  # type: ignore[attr-defined]
+        if not photo:
+            break
+        info = brain.read_medicine(photo) if medicine else brain.read_list(photo)
+        if info.readable or attempt:
+            break
+        ui.speak_now(info.say_to_user)  # how to hold it better, then one more look
+    phone.execute("go_back", {}, None)  # type: ignore[arg-type]  # leave the camera
+    if info is None:
+        ui.say(phrase(lang, "not_finished"))
+        return "not_possible"
+    ui.say(info.say_to_user)
+    if not info.readable:
+        return "not_possible"
+    if medicine:
+        if p.get("send_to") and hasattr(phone, "open_chat"):
+            ui.finish_speaking()
+            return _send_message({"contact": p["send_to"], "text": info.caption, "app": "whatsapp"}, phone, ui, cfg) \
+                or "done"
+        return "done"
+    items = ", ".join(f"{i.quantity} {i.name}".strip() for i in info.items)
+    ui.finish_speaking()
+    if not items or not ui.ask(phrase(lang, "order_list_q")):
+        return "done"
+    # On to the shop: the operator fills the cart; "Place order" would still ask, and the goal stops before it.
+    plan.goal = f"In the Blinkit app, add these to the cart (search for each): {items}. Stop before placing the order " \
+                "and tell the user what is in the cart and the total."
+    plan.routine = ""
+    phone.execute("open_app", {"app_name": "Blinkit"}, None)  # type: ignore[arg-type]
+    return "continue"
 
 
 def _scam_check(phone: PhoneDriver, ui, lang: str, brain) -> str:

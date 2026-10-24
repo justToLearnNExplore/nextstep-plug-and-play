@@ -333,6 +333,19 @@ class AndroidAdbDriver:
         messages += notification_messages(self.shell.run("dumpsys notification --noredact 2>/dev/null"))
         return {"ok": True, "calls": calls, "messages": messages, "calls_readable": bool(r and r.get("ok"))}
 
+    def open_camera(self) -> dict[str, Any]:
+        """The phone's camera, in photo mode. Nothing is saved: the box looks at the live view."""
+        out = self.shell.run("am start -a android.media.action.STILL_IMAGE_CAMERA 2>&1")
+        self.settle()
+        return {"ok": "Error" not in out}
+
+    def photo(self) -> str | None:
+        """A sharp look at the screen (for reading small print through the camera), as JPEG base64."""
+        r = self._h("screenshot", max_w=1440, quality=85)
+        if r and r.get("ok"):
+            return r["jpeg_b64"]
+        return self._screenshot_b64()
+
     def play_video(self, query: str) -> dict[str, Any]:
         """YouTube's own "play from search" (what voice assistants use): it usually starts the top result."""
         pkg = KNOWN_APPS["youtube"]

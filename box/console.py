@@ -32,6 +32,7 @@ class Console:
 
     def speak_now(self, text: str) -> None:
         """Says `text` after whatever is being said, and returns when done."""
+        print(f"\n🔈 {text}\n", flush=True)
         self.finish_speaking()
         if self.speak_enabled and text:
             subprocess.run(self._say(text))

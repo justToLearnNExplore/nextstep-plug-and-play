@@ -176,3 +176,72 @@ def test_a_task_that_worked_is_replayed_next_time_with_new_details():
     assert ("type", {"text": "curd", "press_enter": False}) in phone.done
     assert phone.done[-1] == ("click", {"x": 850, "y": 225})  # the ADD next to Amul Curd
     assert "from the saved routine" in g2.calls[1][1][0]
+
+
+class CameraPhone(FakePhone):
+    def __init__(self, *screens):
+        super().__init__(*screens)
+        self.camera = 0
+
+    def open_camera(self):
+        self.camera += 1
+        return {"ok": True}
+
+    def photo(self):
+        return "SHOT"
+
+
+def no_sleep(monkeypatch):
+    from box.brain import playbooks
+    monkeypatch.setattr(playbooks.time, "sleep", lambda s: None)
+
+
+def medicine(readable=True, say="This looks like Dolo 650, paracetamol tablets. It expires in August 2027."):
+    from box.brain.schemas import MedicineInfo
+    return MedicineInfo(readable=readable, name="Dolo 650" if readable else "", generic="Paracetamol 650 mg",
+                        expiry="08/2027", expired=False, say_to_user=say,
+                        caption="This is the medicine I have: Dolo 650 (Paracetamol 650 mg).")
+
+
+def test_medicine_label_is_read_through_the_phone_camera(monkeypatch):
+    no_sleep(monkeypatch)
+    g = FakeGemini(plan("read_medicine"), medicine())
+    phone = CameraPhone(HOME)
+    con = FakeConsole()
+    assert runner(g, phone, con).run("what is this tablet").outcome == "done"
+    assert phone.camera == 1 and phone.done == [("go_back", {})]  # left the camera afterwards
+    assert "Hold the medicine's name" in con.said[0] and con.said[-1].startswith("This looks like Dolo 650")
+    assert con.asked == []
+
+
+def test_an_unreadable_label_gets_advice_and_one_more_look(monkeypatch):
+    no_sleep(monkeypatch)
+    g = FakeGemini(plan("read_medicine"), medicine(False, "Please hold it a little closer, with the name facing the phone."),
+                   medicine())
+    con = FakeConsole()
+    assert runner(g, CameraPhone(HOME), con).run("read this medicine").outcome == "done"
+    assert con.said[1] == "Please hold it a little closer, with the name facing the phone."
+    assert con.said[-1].startswith("This looks like Dolo 650")
+
+
+def test_a_written_grocery_list_goes_to_the_cart_but_is_never_ordered(monkeypatch):
+    from test_brain import turn
+
+    from box.brain.schemas import GroceryItem, GroceryList
+    no_sleep(monkeypatch)
+    lst = GroceryList(readable=True, items=[GroceryItem(name="milk", quantity="1 litre"), GroceryItem(name="eggs", quantity="6")],
+                      say_to_user="Your list has 1 litre milk and 6 eggs.")
+    g = FakeGemini(plan("read_list"), lst, turn(done=True, success=True, message="Milk and eggs are in your cart, ₹145."))
+    phone = CameraPhone(HOME, HOME, HOME)
+    con = FakeConsole(answers=[True])
+    assert runner(g, phone, con).run("order what's on my list").outcome == "done"
+    assert con.asked == ["Shall I add these to your Blinkit cart? I won't place the order."]
+    assert ("open_app", {"app_name": "Blinkit"}) in phone.done
+    goal = g.calls[2][1][0]
+    assert "1 litre milk, 6 eggs" in goal and "Stop before placing the order" in goal
+
+
+def test_a_phone_without_camera_help_says_so():
+    con = FakeConsole()
+    assert runner(FakeGemini(plan("read_medicine")), FakePhone(HOME), con).run("read this").outcome == "not_possible"
+    assert con.said == ["I can't use this phone's camera yet."]

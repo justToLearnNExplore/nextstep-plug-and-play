@@ -12,8 +12,8 @@ import html
 import time
 
 from ..drivers.base import ScreenState
-from .llm import Audio, images
-from .schemas import Explanation, Missed, Plan, Reply, ScamVerdict, Turn
+from .llm import Audio, Image, images
+from .schemas import Explanation, GroceryList, MedicineInfo, Missed, Plan, Reply, ScamVerdict, Turn
 
 # Fastest on a free Google AI Studio key (3.8 / 3.7 Flash are mostly busy there: 503/504 after 8-29 s;
 # 2.5 is closed to new keys). On Vercel AI Gateway's free tier only 2.5 is allowed: the box skips the
@@ -34,7 +34,8 @@ Rules:
   phone is too loud or too quiet (up, down, or max if they can't hear it at all or it doesn't ring); battery
   for questions about the battery; explain_screen when they ask what is on the screen or what this is, or are
   confused by it; missed for "what did I miss?", missed calls or new messages; scam_check when they ask
-  whether a message, call or link is safe, genuine or a fraud; web_search for
+  whether a message, call or link is safe, genuine or a fraud; read_medicine to read a medicine's label
+  (send_to = who to send it to, if they said so); read_list to read their written grocery list; web_search for
   looking something up; open_link only for these URL forms: https://www.youtube.com/results?search_query=…,
   https://blinkit.com/s/?q=…, https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[formatted_address]=…,
   https://www.google.com/search?q=…, https://www.google.com/maps/search/…; open_app whenever the task
@@ -76,6 +77,21 @@ courier, income-tax refund, lottery or prize, job offers, "Hi Mum/Dad, new numbe
 OTP, PIN or a UPI collect request, links to install AnyDesk/TeamViewer/.apk files, fake police or CBI
 "digital arrest" threats. You may get a whole chat or inbox: judge the most recent message(s) from
 other people and ignore the app's own buttons and menus.
+""".strip()
+
+MEDICINE = """
+You read medicine packaging that an older adult in India holds up to their phone's camera (strip,
+bottle, box or prescription). Find the brand name, active ingredient(s) with strength, and the printed
+expiry. If the label is blurred, cut off or not a medicine, set readable=false and say kindly how to
+hold it (closer, more light, the name side). expired=true only if the printed expiry is clearly before
+today. Never give advice about dosage, use, side effects or substitutes, and never diagnose.
+""".strip()
+
+GROCERY = """
+You read a grocery list that an older adult in India holds up to their phone's camera (handwritten or
+printed, English, Hindi or Kannada, maybe mixed). Give each item with its quantity, item names in the
+English words a grocery app uses, and skip crossed-out items. If it isn't a list or can't be read, set
+readable=false and say kindly how to hold it better.
 """.strip()
 
 LISTENER = """
@@ -184,6 +200,15 @@ class Brain:
     def scam_verdict(self, text: str) -> ScamVerdict:
         verdict = self.g.structured(self.planner_models, SCAM, [f"{self._lang()}\nOn the screen:\n{text}"], ScamVerdict)
         return verdict.model_copy(update={"warning": html.unescape(verdict.warning)})
+
+    def read_medicine(self, photo_b64: str) -> MedicineInfo:
+        info = self.g.structured(self.planner_models, MEDICINE,
+                                 [f"{self._lang()}\nToday: {time.strftime('%Y-%m-%d')}", Image(photo_b64)], MedicineInfo)
+        return info.model_copy(update={"say_to_user": html.unescape(info.say_to_user), "caption": html.unescape(info.caption)})
+
+    def read_list(self, photo_b64: str) -> GroceryList:
+        got = self.g.structured(self.planner_models, GROCERY, [self._lang(), Image(photo_b64)], GroceryList)
+        return got.model_copy(update={"say_to_user": html.unescape(got.say_to_user)})
 
     def hear_answer(self, speech_wav_b64: str, question: str) -> str:
         """'yes', 'no' or 'unclear' for a spoken answer to `question`."""
