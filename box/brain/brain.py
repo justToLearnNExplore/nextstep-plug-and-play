@@ -13,7 +13,7 @@ import time
 
 from ..drivers.base import ScreenState
 from .llm import Audio, images
-from .schemas import Explanation, Missed, Plan, Reply, Turn
+from .schemas import Explanation, Missed, Plan, Reply, ScamVerdict, Turn
 
 # Fastest on a free Google AI Studio key (3.8 / 3.7 Flash are mostly busy there: 503/504 after 8-29 s;
 # 2.5 is closed to new keys). On Vercel AI Gateway's free tier only 2.5 is allowed: the box skips the
@@ -33,7 +33,8 @@ Rules:
   (show the route, never start navigation; mode=walking or transit only if they said so); volume when the
   phone is too loud or too quiet (up, down, or max if they can't hear it at all or it doesn't ring); battery
   for questions about the battery; explain_screen when they ask what is on the screen or what this is, or are
-  confused by it; missed for "what did I miss?", missed calls or new messages; web_search for
+  confused by it; missed for "what did I miss?", missed calls or new messages; scam_check when they ask
+  whether a message, call or link is safe, genuine or a fraud; web_search for
   looking something up; open_link only for these URL forms: https://www.youtube.com/results?search_query=…,
   https://blinkit.com/s/?q=…, https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[formatted_address]=…,
   https://www.google.com/search?q=…, https://www.google.com/maps/search/…; open_app whenever the task
@@ -63,6 +64,15 @@ Tell an older adult what they missed on their phone in the last hour: missed cal
 Group by person, most important first (family, doctor, repeated calls). Use names, not numbers, when a
 name is known. Short and warm, to be read aloud. Never read out codes: say "a verification code".
 Say plainly if a message looks like a scam (do not open its link). If there is nothing, say so kindly.
+""".strip()
+
+SCAM = """
+You check the message(s) an older adult in India received (SMS or WhatsApp) for fraud. Common scams:
+fake KYC/PAN/Aadhaar update, account blocked, electricity cut tonight, parcel held by India Post or a
+courier, income-tax refund, lottery or prize, job offers, "Hi Mum/Dad, new number", requests for an
+OTP, PIN or a UPI collect request, links to install AnyDesk/TeamViewer/.apk files, fake police or CBI
+"digital arrest" threats. You may get a whole chat or inbox: judge the most recent message(s) from
+other people and ignore the app's own buttons and menus.
 """.strip()
 
 LISTENER = """
@@ -167,6 +177,10 @@ class Brain:
                   for m in messages]
         text = f"{self._lang()}\nLast hour:\n" + ("\n".join(lines) or "(nothing)")
         return html.unescape(self.g.structured(self.planner_models, MISSED, [text], Missed).summary)
+
+    def scam_verdict(self, text: str) -> ScamVerdict:
+        verdict = self.g.structured(self.planner_models, SCAM, [f"{self._lang()}\nOn the screen:\n{text}"], ScamVerdict)
+        return verdict.model_copy(update={"warning": html.unescape(verdict.warning)})
 
     def hear_answer(self, speech_wav_b64: str, question: str) -> str:
         """'yes', 'no' or 'unclear' for a spoken answer to `question`."""

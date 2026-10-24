@@ -67,3 +67,59 @@ def test_louder_says_when_the_phone_was_on_silent():
     con = FakeConsole()
     runner(FakeGemini(plan("volume", [("level", "max")])), SilentPhone(HOME), con).run("my phone doesn't ring")
     assert con.said[-1] == "Your phone was on silent. It will ring again now. The volume is now at 100 percent."
+
+
+def test_scam_rules_from_nextstep():
+    from box.brain.scam import is_lookalike, is_official_domain, rule_signals
+    risk, reasons, brand = rule_signals("Dear customer your SBI account is blocked. Update KYC at sbi-kyc-update.in today")
+    assert risk == "high" and brand == "State Bank of India" and any(r.startswith("lookalike_domain") for r in reasons)
+    assert rule_signals("India Post: your parcel is on hold. Pay Rs 25 redelivery fee immediately http://ind-post.top/pay")[0] == "high"
+    assert rule_signals("Amma I will come home by 7, keep dinner ready") == ("none", [], None)
+    assert is_official_domain("www.onlinesbi.sbi") and not is_official_domain("incometax-refund.in")
+    assert is_official_domain("onlinesbi.sbi.bank.in") and is_official_domain("epfindia.gov.in")
+    assert is_lookalike("sbi-bank.in") is not None  # not under .bank.in: a look-alike
+    assert is_lookalike("hdfcbank-secure.co") is not None and is_lookalike("hdfcbank.com") is None
+
+
+SCAM_SMS = screen(node("56767"), node("SBI Alert: Your KYC has expired and your account will be BLOCKED today. "
+                                      "Update now at http://sbi-kyc-update.in/verify"), node("Text message", edit=True),
+                  package="com.google.android.apps.messaging")
+
+
+def test_a_scam_gets_a_warning_and_only_the_real_bank_site_is_offered():
+    from box.brain.schemas import ScamVerdict
+    g = FakeGemini(plan("scam_check"), ScamVerdict(risk="high", reasons=["fake_kyc"], impersonates="SBI",
+                                                    warning="This is a fake SBI message. Do not open the link."))
+    phone = FakePhone(SCAM_SMS)
+    con = FakeConsole(answers=[True])
+    assert runner(g, phone, con).run("is this message real?").outcome == "done"
+    assert con.said[0] == "This is a fake SBI message. Do not open the link."
+    assert con.asked == ["Shall I open the official State Bank of India website?"]
+    assert phone.done == [("open_link", {"url": "https://www.onlinesbi.sbi"})]
+
+
+def test_the_rules_alone_catch_a_scam_the_ai_misses():
+    from box.brain.schemas import ScamVerdict
+    g = FakeGemini(plan("scam_check"), ScamVerdict(risk="none", reasons=[], impersonates="", warning=""))
+    con = FakeConsole(answers=[False])
+    runner(g, FakePhone(SCAM_SMS), con).run("is this ok")
+    assert "looks like a scam" in con.said[0]
+
+
+def test_a_family_message_is_called_safe():
+    from box.brain.schemas import ScamVerdict
+    chat = screen(node("Amma I will come home by 7, keep dinner ready"), package="com.whatsapp")
+    g = FakeGemini(plan("scam_check"), ScamVerdict(risk="none", reasons=[], impersonates="", warning=""))
+    con = FakeConsole()
+    runner(g, FakePhone(chat), con).run("is this safe")
+    assert con.said == ["I don't see signs of a scam here. Still, never share your OTP, PIN or password with anyone."]
+
+
+def test_links_inside_messages_are_never_tapped_unless_official():
+    from test_brain import act
+
+    from box.brain.safety import gate
+    link = SCAM_SMS.nodes[1]
+    assert gate(act("tap", 1, "http://sbi-kyc-update.in/verify"), link, SCAM_SMS, "en-IN")[0] == "blocked"
+    real = screen(node("Login at https://www.onlinesbi.sbi", click=True), package="com.google.android.apps.messaging")
+    assert gate(act("tap", 0, "Login at https://www.onlinesbi.sbi"), real.nodes[0], real, "en-IN")[0] == "auto"

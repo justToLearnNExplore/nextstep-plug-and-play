@@ -35,6 +35,9 @@ PHRASES = {
         "take_back": "Shall I take you back?",
         "go_home_q": "Shall I go to the home screen?",
         "ringer_on": "Your phone was on silent. It will ring again now.",
+        "scam_warning": "This message looks like a scam. Do not open the link and do not share any details or OTP.",
+        "scam_safe": "I don't see signs of a scam here. Still, never share your OTP, PIN or password with anyone.",
+        "official_site_q": "Shall I open the official {name} website?",
     },
     "hi-IN": {
         "thinking": "एक पल, सोच रहा हूँ…",
@@ -70,6 +73,9 @@ PHRASES = {
         "take_back": "क्या मैं आपको वापस ले चलूँ?",
         "go_home_q": "क्या मैं होम स्क्रीन पर चलूँ?",
         "ringer_on": "आपका फ़ोन साइलेंट पर था। अब यह फिर से बजेगा।",
+        "scam_warning": "यह मैसेज धोखा लगता है। लिंक मत खोलिए और कोई जानकारी या ओटीपी मत बताइए।",
+        "scam_safe": "मुझे यहाँ धोखे के संकेत नहीं दिखते। फिर भी अपना ओटीपी, पिन या पासवर्ड किसी को न बताएँ।",
+        "official_site_q": "क्या मैं {name} की असली वेबसाइट खोलूँ?",
     },
     "kn-IN": {
         "thinking": "ಒಂದು ಕ್ಷಣ, ಯೋಚಿಸುತ್ತಿದ್ದೇನೆ…",
@@ -105,6 +111,9 @@ PHRASES = {
         "take_back": "ನಿಮ್ಮನ್ನು ಹಿಂದಕ್ಕೆ ಕರೆದೊಯ್ಯಲೇ?",
         "go_home_q": "ಹೋಮ್ ಸ್ಕ್ರೀನ್‌ಗೆ ಹೋಗಲೇ?",
         "ringer_on": "ನಿಮ್ಮ ಫೋನ್ ಸೈಲೆಂಟ್‌ನಲ್ಲಿತ್ತು. ಈಗ ಮತ್ತೆ ರಿಂಗ್ ಆಗುತ್ತದೆ.",
+        "scam_warning": "ಈ ಸಂದೇಶ ಮೋಸದಂತೆ ಕಾಣುತ್ತದೆ. ಲಿಂಕ್ ತೆರೆಯಬೇಡಿ, ಯಾವುದೇ ವಿವರ ಅಥವಾ ಒಟಿಪಿ ಹಂಚಿಕೊಳ್ಳಬೇಡಿ.",
+        "scam_safe": "ಇಲ್ಲಿ ಮೋಸದ ಲಕ್ಷಣಗಳು ಕಾಣುತ್ತಿಲ್ಲ. ಆದರೂ ನಿಮ್ಮ ಒಟಿಪಿ, ಪಿನ್ ಅಥವಾ ಪಾಸ್‌ವರ್ಡ್ ಯಾರಿಗೂ ಹೇಳಬೇಡಿ.",
+        "official_site_q": "{name} ನ ಅಧಿಕೃತ ವೆಬ್‌ಸೈಟ್ ತೆರೆಯಲೇ?",
     },
 }
 

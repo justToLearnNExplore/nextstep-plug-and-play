@@ -11,6 +11,7 @@ from typing import Any
 
 from ..drivers.base import ScreenState
 from ..phrases import phrase
+from .scam import official_url, unsafe_link
 from .schemas import Action
 
 IRREVERSIBLE = re.compile(
@@ -26,6 +27,9 @@ IRREVERSIBLE = re.compile(
 SECRET = re.compile(r"password|passcode|\bpin\b|otp|one.?time|cvv|card number|upi|mpin|पासवर्ड|ओटीपी|ಪಾಸ್‌ವರ್ಡ್", re.I)
 KEYPAD_EDIT = re.compile(r"^(delete|backspace|del|clear|erase)\b", re.I)
 PAYMENT_APPS = {"net.one97.paytm", "com.phonepe.app", "com.google.android.apps.nbu.paisa.user", "in.org.npci.upiapp"}
+# Links inside messages in these apps are only opened if they are official sites (scam.py).
+MESSAGING_APPS = {"com.whatsapp", "com.whatsapp.w4b", "com.google.android.apps.messaging", "com.samsung.android.messaging",
+                  "com.android.mms", "com.truecaller", "org.telegram.messenger"}
 # On an iPhone the box can't see which app is open, only its words: a UPI screen is a payment app.
 PAYMENT_WORDS = re.compile(r"\bupi\b", re.I)
 LINK_ALLOWLIST = (
@@ -55,7 +59,7 @@ def payment_screen(screen: ScreenState) -> bool:
 
 
 def link_allowed(url: str) -> bool:
-    return url.startswith(LINK_ALLOWLIST)
+    return url.startswith(LINK_ALLOWLIST) or official_url(url)
 
 
 def gate(action: Action, node: dict[str, Any] | None, screen: ScreenState, lang: str) -> tuple[str, str]:
@@ -78,6 +82,8 @@ def gate(action: Action, node: dict[str, Any] | None, screen: ScreenState, lang:
     if action.kind in ("tap", "long_press"):
         if node and node.get("secure"):
             return "private", phrase(lang, "private")
+        if screen.package in MESSAGING_APPS and unsafe_link(label):
+            return "blocked", phrase(lang, "blocked")  # a link in a message that isn't an official site
         if action.irreversible or ((IRREVERSIBLE.search(label) or IRREVERSIBLE.search(action.intent))
                                    and not keypad_edit_key(node, screen)):
             return "confirm", f"{action.intent} {phrase(lang, 'confirm')}".strip()

@@ -2,6 +2,8 @@
 
 These ask their own, more exact question instead of the plan's (or none):
 explain_screen  says what the current screen is and whether it is safe; offers to go back if it isn't
+scam_check    "Is this message safe?": fixed rules plus the AI, the more cautious wins; offers only an
+              official website (or the cyber-crime portal), never the message's link
 missed        "What did I miss?": missed calls, SMS and message notifications of the last hour, read on
               the phone; codes (OTPs) are blanked out on the box before anything goes to the AI
 call          looks the person up in the phone's contacts on the box (the list never goes to Gemini), asks
@@ -28,6 +30,7 @@ from ..config import Config
 from ..drivers.base import PhoneDriver, ScreenState, center
 from ..phrases import phrase
 from .safety import link_allowed
+from .scam import CYBER_CRIME, RANK, find_by_alias, rule_signals, visible_text
 from .schemas import Plan
 
 YOUTUBE = "com.google.android.youtube"
@@ -146,6 +149,8 @@ def before_approval(plan: Plan, phone: PhoneDriver, ui, cfg: Config, brain=None)
     p, lang = params(plan), cfg.language
     if plan.playbook == "explain_screen" and brain is not None:
         return _explain(phone, ui, lang, brain)
+    if plan.playbook == "scam_check" and brain is not None:
+        return _scam_check(phone, ui, lang, brain)
     if plan.playbook == "missed" and brain is not None and hasattr(phone, "recent_activity"):
         got = phone.recent_activity()  # type: ignore[attr-defined]
         messages = [{**m, "text": hide_codes(str(m.get("text", "")))} for m in got.get("messages", [])]
@@ -181,6 +186,27 @@ def _explain(phone: PhoneDriver, ui, lang: str, brain) -> str:
         ui.finish_speaking()
         if ui.ask(phrase(lang, "take_back" if exp.suggest == "back" else "go_home_q")):
             phone.execute("go_back" if exp.suggest == "back" else "go_home", {}, None)  # type: ignore[arg-type]
+    return "done"
+
+
+def _scam_check(phone: PhoneDriver, ui, lang: str, brain) -> str:
+    text = visible_text(phone.capture(False))
+    risk, _, brand = rule_signals(text)
+    try:
+        verdict = brain.scam_verdict(text)
+    except RuntimeError:  # no AI right now: the rules alone still protect
+        verdict = None
+    if verdict and RANK[verdict.risk] > RANK[risk]:
+        risk = verdict.risk
+    if risk in ("none", "low"):
+        ui.say(phrase(lang, "scam_safe"))
+        return "done"
+    ui.say((verdict.warning if verdict else "") or phrase(lang, "scam_warning"))
+    site = find_by_alias(verdict.impersonates if verdict else "") or find_by_alias(brand) or find_by_alias(text) \
+        or CYBER_CRIME
+    ui.finish_speaking()
+    if ui.ask(phrase(lang, "official_site_q", name=site.name)):
+        phone.execute("open_link", {"url": site.url}, None)  # type: ignore[arg-type]
     return "done"
 
 

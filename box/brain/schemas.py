@@ -19,12 +19,13 @@ class Plan(BaseModel):
     refused: bool = Field(description="True for anything harmful, moving money to people, or sharing OTPs/PINs/passwords.")
     app: str = Field(description="Main app to use, e.g. 'YouTube', 'Clock', 'Chrome'. Empty if none.")
     playbook: Literal["none", "set_alarm", "set_timer", "call", "send_message", "play_video", "directions", "volume",
-                      "battery", "explain_screen", "missed", "open_link", "web_search", "open_app"] = Field(
+                      "battery", "explain_screen", "missed", "scam_check", "open_link", "web_search", "open_app"] = Field(
         description="A shortcut that does the task (or its first part) without step-by-step AI: "
         "set_alarm (params hour 0-23, minute, label), set_timer (params seconds, label), "
         "call (param contact + contact_latin, or number), send_message (params contact + contact_latin or number, "
         "text, app whatsapp|sms), play_video (param query), directions (params place, mode driving|walking|transit), "
         "volume (param level up|down|max), battery (no params), explain_screen (no params), missed (no params), "
+        "scam_check (no params), "
         "open_link (param url), "
         "web_search (param query), open_app (param app).")
     params: list[Param] = Field(description="Playbook parameters, e.g. [{name: 'hour', value: '7'}].")
@@ -42,6 +43,14 @@ class Explanation(BaseModel):
 
 class Missed(BaseModel):
     summary: str = Field(description="What the user missed, in their language, 2-5 short sentences to be read aloud.")
+
+
+class ScamVerdict(BaseModel):
+    risk: Literal["none", "low", "medium", "high"]
+    reasons: list[str] = Field(description="Short English reason codes, e.g. 'fake_kyc', 'asks_otp'.")
+    impersonates: str = Field(description="Organisation the message pretends to be (e.g. 'SBI', 'India Post'), or ''.")
+    warning: str = Field(description="1-2 calm sentences in the user's language. When risk is medium or high: do not "
+                         "open the link and do not share any details or OTP. Never repeat the link. '' if none/low.")
 
 
 class Reply(BaseModel):
