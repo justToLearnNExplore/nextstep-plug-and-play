@@ -1,0 +1,12 @@
+[project]
+name = "nextstep-box"
+version = "0.1.0"
+description = "NextStep Box: plug-and-play hardware that lets an AI agent use any Android or iPhone for elderly people"
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.27", "certifi", "pillow>=10"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
