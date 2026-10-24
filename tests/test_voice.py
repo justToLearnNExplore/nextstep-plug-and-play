@@ -36,7 +36,7 @@ class FakeEars:
     def __init__(self, *heard):
         self.heard = list(heard)
 
-    def listen(self, wait_s=8.0, max_s=15.0, quiet_s=1.0):
+    def listen(self, wait_s=8.0, max_s=15.0, quiet_s=1.0, pressed=None):
         return self.heard.pop(0) if self.heard else None
 
 
@@ -103,3 +103,41 @@ def test_plug_in_and_talk():
     assert said[1] == "Hello! I'm ready. Tell me what you need."
     assert phones[0].alarms == [(7, 0, "")]  # what was heard got done
     assert said[-1] == "The phone is unplugged. Goodbye!"
+
+
+def test_the_button_says_yes():
+    ui, asked = voice_ui(FakeEars(b""), [])
+    assert ui.ask("Send this to Asha?") is True and asked == []  # no AI needed for a press
+
+
+def test_pressing_the_button_while_waiting_means_listen_now():
+    states = iter(["ready", "ready", "absent"])
+
+    def state(kind, serial):
+        try:
+            return next(states)
+        except StopIteration:
+            raise Stop from None
+
+    said = []
+    ui = VoiceConsole(FakeEars(), lambda w, q: "yes", "en-IN", speak=False, auto_yes=True)
+    ui.say = ui.speak_now = said.append
+    g = FakeGemini(plan("set_alarm", [("hour", "6")]).model_copy(update={"heard": "alarm at 6"}))
+    phone = FakePhone(HOME)
+    with pytest.raises(Stop):
+        serve(Config(), Brain(g), "android", None, lambda k, s: phone, ui, FakeEars(b"", b"RIFF"), state=state,
+              sleep=lambda s: None)
+    assert "Yes? Tell me." in said and phone.alarms == [(6, 0, "")]
+
+
+def test_voices_and_microphone_on_a_pi(monkeypatch):
+    from box import speech, voice
+    monkeypatch.setattr(speech.sys, "platform", "linux")
+    monkeypatch.setattr(speech.shutil, "which", lambda name: f"/usr/bin/{name}" if name == "espeak-ng" else None)
+    assert speech.voice_for("kn-IN") == "espeak:kn" and speech.voice_for("hi-IN") == "espeak:hi"
+    assert speech.speech_argv("ನಮಸ್ಕಾರ", "espeak:kn") == ["espeak-ng", "-v", "kn", "-s", "150", "ನಮಸ್ಕಾರ"]
+    piper = speech.speech_argv("Hello; rm -rf /", "piper:/v/en.onnx")
+    assert piper[0] == "sh" and piper[-2:] == ["Hello; rm -rf /", "/v/en.onnx"]  # text is an argument, not shell code
+    assert speech.speech_argv("Hi", "say:Rishi") == ["say", "-r", "185", "-v", "Rishi", "Hi"]
+    monkeypatch.setattr(voice.sys, "platform", "linux")
+    assert Ears("plughw:1,0").command()[:4] == ["arecord", "-q", "-D", "plughw:1,0"]

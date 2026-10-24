@@ -62,7 +62,8 @@ def main() -> None:
     except NoKey as e:
         sys.exit(str(e))
     brain = Brain(llm, cfg.language, cfg.planner_models or None, cfg.operator_models or None, cfg.operator_thinking)
-    from .voice import Ears, VoiceConsole, voice_for
+    from .speech import voice_for
+    from .voice import Ears, VoiceConsole
     speak, voice = cfg.speak and not a.quiet, voice_for(cfg.language)
     if a.serve:
         from .serve import serve

@@ -1,22 +1,23 @@
 """Stand-in for the box's face while there is no hardware: the terminal is the screen, Enter is
-the big button, and macOS `say` is the speaker. On the real box this becomes the LED ring,
-button and speaker; the agent loop doesn't change."""
+the big button, and the computer's speech (speech.py) is the speaker. On the real box the button and
+light are face.py; the agent loop doesn't change."""
 
-import shutil
 import subprocess
 import sys
+
+from .speech import speech_argv
 
 
 class Console:
     def __init__(self, speak: bool = True, auto_yes: bool = False, plan_only: bool = False, voice: str | None = None):
-        self.speak_enabled = speak and shutil.which("say") is not None
-        self.voice = voice  # macOS voice for the box's language (Rishi, Lekha); None = the Mac's default
+        self.speak_enabled = speak and voice is not None
+        self.voice = voice  # speech.voice_for(): "say:Rishi", "espeak:hi"...; None = this machine can't speak
         self.auto_yes = auto_yes
         self.plan_only = plan_only  # testing on a real phone: yes to the plan, no to everything else
         self._speaking: subprocess.Popen | None = None
 
     def _say(self, text: str) -> list[str]:
-        return ["say", "-r", "185"] + (["-v", self.voice] if self.voice else []) + [text]
+        return speech_argv(text, self.voice or "")
 
     def _speak(self, text: str) -> None:
         if not self.speak_enabled or not text:

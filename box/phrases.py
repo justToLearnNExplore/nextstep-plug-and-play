@@ -42,6 +42,7 @@ PHRASES = {
         "camera_list": "I've opened the camera. Hold your list in front of the phone's back camera, about a hand away. I'll look in a moment.",
         "order_list_q": "Shall I add these to your Blinkit cart? I won't place the order.",
         "no_camera": "I can't use this phone's camera yet.",
+        "yes_tell_me": "Yes? Tell me.",
     },
     "hi-IN": {
         "thinking": "एक पल, सोच रहा हूँ…",
@@ -84,6 +85,7 @@ PHRASES = {
         "camera_list": "मैंने कैमरा खोल दिया है। अपनी लिस्ट फ़ोन के पीछे वाले कैमरे के सामने, लगभग एक हाथ की दूरी पर रखिए। मैं एक पल में देखूँगा।",
         "order_list_q": "क्या मैं ये सामान आपकी Blinkit कार्ट में डाल दूँ? ऑर्डर मैं नहीं करूँगा।",
         "no_camera": "मैं अभी इस फ़ोन का कैमरा इस्तेमाल नहीं कर सकता।",
+        "yes_tell_me": "जी, बताइए।",
     },
     "kn-IN": {
         "thinking": "ಒಂದು ಕ್ಷಣ, ಯೋಚಿಸುತ್ತಿದ್ದೇನೆ…",
@@ -126,6 +128,7 @@ PHRASES = {
         "camera_list": "ನಾನು ಕ್ಯಾಮೆರಾ ತೆರೆದಿದ್ದೇನೆ. ನಿಮ್ಮ ಪಟ್ಟಿಯನ್ನು ಫೋನ್‌ನ ಹಿಂದಿನ ಕ್ಯಾಮೆರಾದ ಮುಂದೆ, ಸುಮಾರು ಒಂದು ಕೈ ದೂರದಲ್ಲಿ ಹಿಡಿಯಿರಿ. ನಾನು ಒಂದು ಕ್ಷಣದಲ್ಲಿ ನೋಡುತ್ತೇನೆ.",
         "order_list_q": "ಇವುಗಳನ್ನು ನಿಮ್ಮ Blinkit ಕಾರ್ಟ್‌ಗೆ ಸೇರಿಸಲೇ? ನಾನು ಆರ್ಡರ್ ಮಾಡುವುದಿಲ್ಲ.",
         "no_camera": "ನಾನು ಈ ಫೋನ್‌ನ ಕ್ಯಾಮೆರಾವನ್ನು ಇನ್ನೂ ಬಳಸಲಾಗುವುದಿಲ್ಲ.",
+        "yes_tell_me": "ಹೇಳಿ.",
     },
 }
 

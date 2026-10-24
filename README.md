@@ -22,8 +22,10 @@ box/
   __main__.py          CLI: python -m box "set an alarm for 7 am" --phone android
   runner.py            agent loop: plan → one yes → playbook or see / decide / act, checked on the box
   phrases.py           everything the box says by itself, in English, Hindi and Kannada
-  console.py           stand-in for the box's button, LED and speaker (terminal + macOS `say`)
-  voice.py             the box's ears (Mac microphone via ffmpeg) and voice (Indian macOS voices); spoken yes/no
+  console.py           stand-in for the box's face: the terminal, Enter as the button, speech.py as the speaker
+  voice.py             the box's ears (Mac mic via ffmpeg, Pi mic via arecord); questions answered aloud
+  speech.py            its voice: macOS `say` (Rishi, Lekha) or, on the Pi, Piper / espeak-ng (also Kannada)
+  face.py              the Pi's button and light (gpiozero); nothing on a Mac
   serve.py             plug in and talk: waits for the phone, says hello, listens, does it, listens again
   brain/
     llm.py             picks the model route from the keys on the box
@@ -33,7 +35,10 @@ box/
     brain.py           planner + operator prompts; screen sent as a numbered element list
     safety.py          gates: auto / confirm (irreversible) / private (passwords, OTPs, payment apps) / blocked
     playbooks.py       shortcuts that skip step-by-step AI (alarm, timer, call, message, YouTube, directions,
-                       volume, battery, web search, allowed links, open app)
+                       volume, battery, explain my screen, what did I miss, scam check, camera help, web search...)
+    scam.py            scam rules + the list of official sites (only these are ever offered or opened)
+    popups.py          "Rate us" / "Update available" pop-ups closed by rule, without the AI
+    routines.py        learned routines: a task that worked is replayed next time by button names
   drivers/
     base.py            PhoneDriver interface + screen format
     android_adb.py     Android over ADB; uses the helper app when it can, plain ADB otherwise
@@ -42,6 +47,8 @@ box/
     iphone_mirroring_helper.swift  its Mac side: window, clicks, keys, text recognition (built on first use)
     ios_sim.py         iPhone stand-in via Xcode's iOS Simulator + idb (needs Xcode; not yet run)
 helper/                the Android helper app (one Java file, no Gradle): build.sh → helper/build/*.apk
+pi/                    the Raspberry Pi box: setup.sh, the start-at-power-on service, install-from-mac.sh
+HARDWARE.md            the first real box: parts, wiring, setup
 tests/
 ```
 
@@ -117,6 +124,24 @@ The box waits for a phone. When one is plugged in (`adb` sees it; on first use i
 | "Set an alarm for seven in the morning" (recording, Rishi voice) | 5.8 s | heard right, 1 Gemini call, alarm set |
 | "सुबह सात बजे का अलार्म लगा दो" (recording, Lekha voice, box in Hindi) | 5.2 s | heard right, asked and answered in Hindi, alarm set |
 | `--serve`: "Start a timer for two minutes" said aloud near the Mac | ready 3.7 s after start; timer running 10.2 s after the speaking began | ~2 s speech + 1 s quiet + 6.3 s to plan and set it; checked on screen |
+
+## Features from NextStep
+
+Rebuilt inside the box from the NextStep app's design (its public repo was only read, never changed or
+called), with the box's own brain:
+
+| Feature | How it works on the box | Live (Android 10 emulator, Vercel) |
+|---|---|---|
+| **Explain my screen** | says what the screen is and whether it's safe; offers to go back from a risky one | scam SMS: "a common scam message and not from your bank", offered back, 9.5 s |
+| **What did I miss?** | missed calls (helper, call-log permission granted over adb), SMS, WhatsApp and other message notifications of the last hour, summarised aloud; 4–8 digit codes are blanked on the box first | missed call + SMS from "Ravi Kumar" and "a verification code", 7.4 s |
+| **Phone on silent** | "louder" also turns Do Not Disturb off (permission granted over adb) and the ringer back on; from near-silent to at least 70 % | DND off, ring 7/7: "Your phone was on silent. It will ring again now.", 4.3 s |
+| **Scam check** | fixed rules (look-alike bank domains, urgency, OTP/PIN requests, prize bait) + the AI, the more cautious wins; offers only the official site (or the cyber-crime portal); `.bank.in` and `.gov.in` count as official; links inside messages are never tapped unless official | fake SBI KYC SMS: warning, offered and opened onlinesbi.sbi, 8.8 s |
+| **Pop-up rules** | "Rate us", "Update available", "Turn on notifications"… closed with "Not now" / "Skip" / "Close", no AI | (tests) |
+| **Learned routines** | a step-by-step task that worked is kept by button names, details as slots ("type {item}", "ADD next to 'Amul {item} 1 L'"); replayed through the safety gates, the AI takes over at the first mismatch and checks the result | "Turn on the dark theme": 3 of 3 steps replayed, 2 AI turns instead of 4 |
+| **Camera help** | opens the phone's camera, says where to hold it, reads the live view (nothing saved): a medicine's name, ingredient and expiry (never dosage advice; can be sent to a contact, asking first), or a written grocery list, then "Shall I add these to your Blinkit cart? I won't place the order" | drawn label: "Dolo-650 (Paracetamol 650 mg), expires February 2028"; drawn list: 5 items, "प्याज़" → onions, crossed-out item skipped; camera steps on the emulator. Android only |
+
+Not brought over: the family's live timeline (needs a server), the floating bubble (the box has no
+screen of its own), Uber and Blinkit ordering are possible step by step but untested (not on the emulator).
 
 ## A real iPhone through iPhone Mirroring
 

@@ -57,9 +57,14 @@ def serve(cfg: Config, brain: Brain, kind: str, serial: str | None, make_phone: 
             ui.speak_now(phrase(lang, "greeting"))
             while state(kind, serial) == "ready":
                 ui.status("🎤 listening…")
-                wav = ears.listen(wait_s=10.0)
-                if wav is None:
+                ui.face.listening()
+                wav = ears.listen(wait_s=10.0, pressed=ui.face.pressed)
+                if wav == b"":  # the button: "listen now"
+                    ui.speak_now(phrase(lang, "yes_tell_me"))
+                    wav = ears.listen(wait_s=10.0)
+                if not wav:
                     continue  # nobody spoke: look at the phone and listen again
+                ui.face.thinking()
                 report = Runner(cfg, brain, phone, ui).run(speech_wav_b64=recording_b64(wav))
                 ui.status(f"📊 {report.summary()}")
                 ui.finish_speaking()
@@ -67,4 +72,5 @@ def serve(cfg: Config, brain: Brain, kind: str, serial: str | None, make_phone: 
             ui.status(f"({str(e)[:200]})")
         finally:
             phone.close()
+            ui.face.idle()
         ui.speak_now(phrase(lang, "unplugged"))

@@ -1,0 +1,17 @@
+# Starts the NextStep Box at every power-on and restarts it if it stops (installed by pi/setup.sh).
+[Unit]
+Description=NextStep Box: plug in a phone and talk
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+Environment=NEXTSTEP_BOX_LLM=gateway
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@DIR@/.venv/bin/python -m box --serve --phone android
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

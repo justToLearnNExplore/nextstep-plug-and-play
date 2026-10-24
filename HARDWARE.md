@@ -50,23 +50,28 @@ The microphone and amplifier share one I2S sound bus; Linux sees them as one sou
 
 ## Setting it up (when the parts arrive)
 
-1. On the Mac, Raspberry Pi Imager → Raspberry Pi OS Lite (64-bit) → in its settings: Wi‑Fi,
-   user name, and SSH on. Write the card, put it in the Pi, power on.
-2. From the Mac: copy this repo, the helper app (`helper/build/nextstep-box-helper.apk`) and the
-   key file (`~/.nextstep-box/ai-gateway.key`) to the Pi, then run the setup script (installs
-   Python, ADB and sound, and starts the box at every power-on).
-3. Plug in an Android phone with USB debugging on, tap **Allow** once, and talk.
+1. On the Mac, Raspberry Pi Imager → Raspberry Pi OS Lite (64-bit) → in its settings: host name
+   `nextstep-box`, a user, Wi‑Fi, and SSH on. Write the card, put it in the Pi, power on.
+2. From the Mac, in this repo: `./pi/install-from-mac.sh <user>@nextstep-box.local`. It copies the
+   repo, the Android helper app and the box's key (to `~/.nextstep-box/` on the Pi, chmod 600), then
+   runs `pi/setup.sh` on the Pi: Python, ADB, sound tools, espeak-ng, the I2S sound card, and a
+   service that starts the box at every power-on. Reboot once when it says so.
+3. Plug in an Android phone with USB debugging on, tap **Allow** once (the box asks), and talk.
+   The box's log: `journalctl -u nextstep-box -f`. If it doesn't hear you, check the microphone with
+   `arecord -l`; `NEXTSTEP_BOX_MIC_MIN` (default 400) is the quietest sound it counts as speech.
 
 ## What changes in the software for the Pi
 
 | Piece | On the Mac today | On the Pi |
 |---|---|---|
-| Start | `python -m box --serve` by hand | a system service, started at power-on, restarted if it stops |
-| Ears | MacBook mic via ffmpeg | INMP441 via ALSA (same speech detection) |
-| Voice | macOS `say` (Rishi, Lekha) | a cloud voice for Hindi and Kannada, Piper (on the Pi) for English; fixed phrases recorded once |
-| Button / light | Enter key, terminal lines | GPIO button (press to talk, "yes", "done"); LED: listening / thinking / done / needs you |
-| Keys, helper app | `~/.nextstep-box/`, built on the Mac | copied once from the Mac (no Android SDK on the Pi) |
+| Start | `python -m box --serve` by hand | `pi/nextstep-box.service`: at power-on, restarted if it stops ✅ |
+| Ears | MacBook mic via ffmpeg | INMP441 via ALSA `arecord` (same speech detection) ✅ |
+| Voice | macOS `say` (Rishi, Lekha) | espeak-ng offline for English, Hindi **and Kannada** ✅; Piper for a more natural English voice if installed (`NEXTSTEP_BOX_PIPER_MODEL`); a cloud voice for Hindi and Kannada is a later choice |
+| Button / light | Enter key, terminal lines | GPIO23 button: "listen now", "yes" / "done" ✅; GPIO24 LED: on = listening, fast blink = working, slow blink = asking ✅ |
+| Keys, helper app | `~/.nextstep-box/`, built on the Mac | copied by `pi/install-from-mac.sh` (no Android SDK on the Pi) ✅ |
 | Internet | the Mac's | home Wi‑Fi, set once on the card (later perhaps the phone's own data) |
+
+✅ = written and tested on the Mac (unit tests); not yet run on a real Pi.
 
 ## iPhone on the Pi (second step, to be tested)
 
